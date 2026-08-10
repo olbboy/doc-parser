@@ -1,0 +1,11 @@
+{
+  "why": "Lưới dày 5078 nét/trang. Docling sắp xếp lại bảng nên text_recall thấp mà không mất gì — file này canh gác chống báo động giả.",
+  "args": [],
+  "parser_contains": "docling",
+  "must_flags": ["DENSE_TABLE_GRID"],
+  "must_not_flags": ["REGION_DROPPED", "REGION_DROPPED_UNREPAIRED", "HIGH_VALUE_MISSING", "TEXT_RECALL_LOW"],
+  "text_recall_min": 0.90,
+  "high_value_recall_min": 0.98,
+  "must_contain": ["√"],
+  "min_occurrences": {"√": 246}
+}

@@ -1,0 +1,10 @@
+{
+  "why": "Docling xếp bảng nhãn 14 dòng model thành hình ảnh rồi vứt. Phải phát hiện và vá bằng anydoc theo trang. Cần ép engine vì bản đầy đủ 34 trang route về T0.",
+  "args": ["--engine", "docling"],
+  "parser_contains": "anydoc-fill",
+  "must_flags": ["REGION_DROPPED"],
+  "must_not_flags": ["TEXT_RECALL_LOW", "HIGH_VALUE_MISSING"],
+  "text_recall_min": 0.95,
+  "high_value_recall_min": 0.98,
+  "must_contain": ["BMU-8", "409.6V", "40.96kWh"]
+}

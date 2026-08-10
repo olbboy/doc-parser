@@ -1,0 +1,10 @@
+{
+  "why": "Sparse high-value drop: Docling giữ nguyên trang nhưng đánh rơi 4 chuẩn chứng nhận bên trong bảng thông số. Page-level fill không cứu được (khối donor không vắng, chỉ vài token trong đó vắng) — phải inject theo dòng từ text layer.",
+  "args": [],
+  "parser_contains": "hv-inject",
+  "must_flags": ["BORDERLESS_SPEC_TABLE", "HIGH_VALUE_RECOVERED"],
+  "must_not_flags": ["HIGH_VALUE_MISSING", "TEXT_RECALL_LOW", "REGION_DROPPED"],
+  "text_recall_min": 0.94,
+  "high_value_recall_min": 0.98,
+  "must_contain": ["IEC62619", "IEC63056", "UN38.3"]
+}

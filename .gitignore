@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Regression fixtures are partner documents and stay out of the repository.
+# See testdata/README.md for what each one has to exercise.
+testdata/regression/*.pdf
