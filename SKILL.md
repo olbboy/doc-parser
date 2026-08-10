@@ -8,7 +8,7 @@ keywords: [pdf, docx, xlsx, pptx, markdown, ocr, rag, docling, mineru, anydoc, m
 argument-hint: "<file-or-glob> [-o outdir] [--dry-run]"
 metadata:
   author: BLVERA
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 # doc-parse — chọn engine theo tài liệu, không theo thói quen
@@ -93,7 +93,7 @@ Mỗi file ra kèm YAML frontmatter: `parser`, `parser_tier`, `parser_reason`, `
 | `DENSE_TABLE_GRID` / `BORDERLESS_SPEC_TABLE` | tài liệu bảng khó | đã tự lên T2 |
 | `NO_HEADING_STYLES` | DOCX không dùng Heading style | **sửa template**, không parser nào cứu được |
 | `LAYOUT_RISK_UNADDRESSED` | tài liệu khó nhưng phải dùng engine rẻ | xếp lại lịch chạy |
-| `TEXT_RECALL_LOW` | mất > 5% từ **và** mất cả mã model/đơn vị | không auto-index |
+| `TEXT_RECALL_LOW` | mất > 5% từ, **và** mất cả mã model/đơn vị **hoặc** có trang nội dung chết | không auto-index |
 | `TEXT_RECALL_WATCH` | mất 2–5% từ, hoặc mất > 5% nhưng token quan trọng còn nguyên | ghi số, index bình thường |
 | `HIGH_VALUE_MISSING` | mất > 10% mã model / đơn vị / chuẩn IEC — kể cả khi `text_recall` cao, **và inject không cứu được** | rà tay trước khi index |
 | `HIGH_VALUE_RECOVERED` | đã kéo lại được mã/đơn vị/chuẩn bị mất từ text layer | xem `high_value_recovered` |
