@@ -11,6 +11,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [2.0.1] — 2026-08-11
+
+### Fixed
+
+- CI: add `pyyaml` to the test workflow install step — the "Validate YAML templates"
+  job imported `yaml` but the package was not installed, causing `ModuleNotFoundError`
+  on both Python 3.12 and 3.13 runners.
+- Add `release.yml` GitHub Actions workflow: automatically creates a GitHub Release with
+  notes extracted from `CHANGELOG.md` and uploads `sdist` + `wheel` when a `vX.Y.Z`
+  tag is pushed.
+- `VERSION` file synced to match `pyproject.toml` (was `1.0.1`, now `2.0.1`).
+- `CHANGELOG.md` section order corrected to newest-first; comparison links were
+  backwards and have been fixed.
+
+---
+
 ## [2.0.0] — 2026-08-11
 
 ### Changed
@@ -125,7 +141,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-[Unreleased]: https://github.com/olbboy/doc-parser/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/olbboy/doc-parser/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/olbboy/doc-parser/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/olbboy/doc-parser/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/olbboy/doc-parser/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/olbboy/doc-parser/compare/v1.0.0...v1.0.1
