@@ -1,0 +1,16 @@
+# Line-ending conventions
+# sh/py/js: LF (Linux/macOS executable)
+# bat/ps1: CRLF (Windows executable)
+# md: LF (consistent diffs)
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.txt  text eol=lf
+*.ps1  text eol=crlf
+*.bat  text eol=crlf

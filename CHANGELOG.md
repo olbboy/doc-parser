@@ -11,6 +11,42 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.1] — 2026-08-11
+
+### Added
+
+- **`README_AI.md`** — dedicated AI agent bootstrap file (step-by-step setup, routing
+  instructions, critical rules, document map, example report format). Inspired by the
+  `README_AI.md` pattern in purpose-built skill routers like reverse-skill.
+- **`AGENTS.md`** — platform-neutral AI entry point: 30-second routing summary and hard
+  rules for any compatible AI client (Claude Code, Cursor, Cline, Codex, …).
+- **`CLAUDE.md`** — Claude Code-specific instruction file, auto-loaded by Claude Code;
+  provides quick orientation, hard rules, test commands, and file map.
+- **`README_vi.md`** — native Vietnamese README mirroring the English README. The field
+  notes and playbook are already in Vietnamese; the README now is too.
+- **`VERSION`** — standalone plaintext version file; machine-readable single source of
+  truth alongside `pyproject.toml` and git tags.
+- **`.gitattributes`** — enforces LF on `.sh/.py/.json/.md/.yml/.toml` and CRLF on
+  `.ps1/.bat`; prevents mixed-EOL commits that dirty `git status` on fresh clones.
+- **`examples/parse-datasheet/README.md`** — end-to-end walkthrough: probe, parse, read
+  frontmatter, make index decision. Exercises the borderless-spec-table failure mode.
+- **`docs/assets/doc-parser.png`** — project logo icon for the README header.
+- **Centered README layout** — logo, tagline, badge row, and navigation link bar all
+  centered with HTML `<p align="center">`. Follows modern open source README standards.
+- **`🌐 Tiếng Việt` nav link** in the English README pointing to `README_vi.md`.
+- **`back to top` links** at every major section of the README.
+- **AI agent callout** at the top of the About section pointing to `README_AI.md`.
+
+### Changed
+
+- `README.md` fully rewritten with centered layout, logo, nav links, i18n link, AI
+  bootstrap pointer, and `back to top` links throughout.
+- `.gitignore` expanded: venvs, IDE files, OS artefacts (`.DS_Store`, `Thumbs.db`),
+  coverage artefacts, MinerU `output/` scratch directory.
+
+---
+
+
 ## [2.0.0] — 2026-08-11
 
 ### Changed
@@ -92,7 +128,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-[Unreleased]: https://github.com/olbboy/doc-parser/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/olbboy/doc-parser/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/olbboy/doc-parser/compare/v2.0.0...v1.0.1
 [2.0.0]: https://github.com/olbboy/doc-parser/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/olbboy/doc-parser/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/olbboy/doc-parser/releases/tag/v1.0.0
+
