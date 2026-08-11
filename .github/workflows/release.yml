@@ -62,7 +62,7 @@ jobs:
         run: pip install build "setuptools>=72" wheel
 
       - name: Build distribution
-        run: python -m build --sdist --wheel
+        run: python -m build --sdist --wheel --no-isolation
 
       # ── Create GitHub Release ─────────────────────────────────────────────
       - name: Create GitHub Release
