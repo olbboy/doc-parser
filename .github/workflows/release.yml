@@ -59,10 +59,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build "setuptools>=72" wheel
+        run: pip install build
 
       - name: Build distribution
-        run: python -m build --sdist --wheel --no-isolation
+        run: python -m build --sdist --wheel
 
       # ── Create GitHub Release ─────────────────────────────────────────────
       - name: Create GitHub Release
