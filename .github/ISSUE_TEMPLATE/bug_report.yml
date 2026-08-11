@@ -1,0 +1,108 @@
+name: Bug Report
+description: Something parsed incorrectly, a flag fired unexpectedly, or the tool crashed.
+title: "[bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to fill this out. The more detail you provide,
+        the faster we can reproduce and fix the problem.
+
+  - type: dropdown
+    id: document-type
+    attributes:
+      label: Document type
+      description: What kind of document were you parsing?
+      options:
+        - PDF (text layer)
+        - PDF (scanned / no text layer)
+        - DOCX
+        - XLSX
+        - PPTX
+        - Other Office (.doc / .xls / .ppt)
+        - Other (msg, ipynb, zip, …)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine chosen by the router
+      description: Check the `parser` field in the YAML frontmatter of the output file.
+      options:
+        - anydoc (T0)
+        - MarkItDown (T0b)
+        - MinerU office (T1)
+        - Docling (T2)
+        - MinerU hybrid (T3)
+        - Unknown / crashed before routing
+    validations:
+      required: true
+
+  - type: textarea
+    id: flags
+    attributes:
+      label: Quality flags fired
+      description: |
+        Paste the `quality_flags` block from the output's YAML frontmatter, e.g.:
+        ```yaml
+        quality_flags:
+          - TEXT_RECALL_LOW
+          - HIGH_VALUE_MISSING
+        text_recall: 0.71
+        ```
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      description: The command you ran (redact any confidential paths).
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened? Include any error messages.
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. macOS 15.2 (Apple M3), Ubuntu 24.04 (x86_64)"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.12.4"
+    validations:
+      required: true
+
+  - type: textarea
+    id: engine-versions
+    attributes:
+      label: Engine versions (if known)
+      description: |
+        Run `pip show anydoc markitdown docling mineru | grep -E "^(Name|Version)"` in each engine venv.
+      render: text
+    validations:
+      required: false

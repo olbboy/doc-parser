@@ -1,6 +1,98 @@
 __pycache__/
 *.pyc
 
-# Regression fixtures are partner documents and stay out of the repository.
-# See testdata/README.md for what each one has to exercise.
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+sdist/
+wheels/
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =============================================================================
+# Virtual environments
+# =============================================================================
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# doc-parse engine venvs are installed to ~/.local/share/doc-parse (not here)
+
+# =============================================================================
+# Testing & coverage
+# =============================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# =============================================================================
+# Type checkers & linters
+# =============================================================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# =============================================================================
+# IDEs & editors
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# =============================================================================
+# OS artefacts
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =============================================================================
+# Environment / secrets
+# =============================================================================
+.env
+.env.local
+.env.*.local
+
+# =============================================================================
+# Regression fixtures — partner documents, not for public release
+# See testdata/README.md for what each fixture must exercise.
+# =============================================================================
 testdata/regression/*.pdf
+
+# =============================================================================
+# MinerU scratch output — mineru-api writes task dirs under CWD by default
+# =============================================================================
+output/

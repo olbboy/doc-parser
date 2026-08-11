@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install probe dependencies
+        # Only the core dependency needed to run the unit tests.
+        # Engine venvs (~3.4 GB) are not installed in CI — the unit tests
+        # cover all gate arithmetic without requiring any PDF fixtures or models.
+        run: pip install pypdfium2
+
+      - name: Run unit tests
+        run: python scripts/test_quality_gates.py
+        env:
+          # Prevent accidental network calls to HuggingFace during CI
+          HF_HUB_OFFLINE: "1"
+
+      - name: Validate YAML templates
+        run: |
+          python -c "
+          import yaml, pathlib, sys
+          failures = []
+          for p in pathlib.Path('.github/ISSUE_TEMPLATE').glob('*.yml'):
+              try:
+                  yaml.safe_load(p.read_text())
+              except yaml.YAMLError as e:
+                  failures.append(f'{p}: {e}')
+          if failures:
+              print('\n'.join(failures)); sys.exit(1)
+          print('All YAML templates valid.')
+          "
+
+      - name: Check no build artefacts are tracked
+        run: |
+          git ls-files --cached '*/__pycache__/*' '*.pyc' '*.pyo' | grep . && {
+            echo "Build artefacts committed — run: git rm -r --cached **/__pycache__/ *.pyc"
+            exit 1
+          } || echo "No build artefacts tracked."

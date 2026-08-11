@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/olbboy/doc-parser/discussions
+    about: |
+      For questions about routing decisions, engine behaviour, or how to
+      interpret quality flags — please use GitHub Discussions rather than Issues.

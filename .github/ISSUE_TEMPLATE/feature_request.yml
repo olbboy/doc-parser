@@ -1,0 +1,63 @@
+name: Feature Request
+description: Suggest a new engine, routing rule, quality flag, or other improvement.
+title: "[feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests that describe a **specific failure mode** and include a
+        proposed measurement method are much more likely to be acted on.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New engine / engine adapter
+        - Routing rule change
+        - New quality flag
+        - Threshold refinement
+        - Repair / post-processing
+        - CLI / usability
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: |
+        What failure mode are you trying to fix? What document type or situation
+        does the current tool handle poorly?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed solution
+      description: Describe what you would like to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: measurement
+    attributes:
+      label: How would we measure whether this is an improvement?
+      description: |
+        e.g. "Run against these 10 documents and compare `text_recall` before/after",
+        or "The `BORDERLESS_SPEC_TABLE` flag should fire on these document types and
+        not on these others."
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why did you prefer this one?
+    validations:
+      required: false

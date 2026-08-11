@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=72", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "doc-parser"
+version = "2.0.0"
+description = "Route documents to the cheapest parsing engine that can handle them — probe, parse, gate, repair."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "olbboy" }]
+requires-python = ">=3.12"
+keywords = [
+    "pdf", "docx", "xlsx", "pptx", "markdown", "ocr",
+    "rag", "document-parsing", "docling", "mineru", "anydoc",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Utilities",
+]
+
+# Core dependency: only what probe_document.py and quality_gates.py need
+# to run without any of the engine venvs.
+dependencies = [
+    "pypdfium2>=4.30",
+]
+
+[project.urls]
+Homepage    = "https://github.com/olbboy/doc-parser"
+Repository  = "https://github.com/olbboy/doc-parser"
+"Bug Tracker" = "https://github.com/olbboy/doc-parser/issues"
+Changelog   = "https://github.com/olbboy/doc-parser/blob/main/CHANGELOG.md"
+
+[project.scripts]
+doc-probe  = "scripts.probe_document:main"
+doc-parse  = "scripts.parse_document:main"
+
+# ---------------------------------------------------------------------------
+# Optional engine dependency groups
+# Install with: pip install "doc-parser[docling]" etc.
+# The full engine setup (venvs + model downloads) still requires setup-engines.sh
+# ---------------------------------------------------------------------------
+[project.optional-dependencies]
+anydoc     = ["anydoc>=0.1.7"]
+markitdown = ["markitdown[all]>=0.1.7"]
+docling    = ["docling>=2.119.0"]
+mineru     = ["mineru[pipeline]>=3.4.4"]
+all        = [
+    "anydoc>=0.1.7",
+    "markitdown[all]>=0.1.7",
+    "docling>=2.119.0",
+    "mineru[pipeline]>=3.4.4",
+]
+dev = [
+    "pytest>=8.0",
+    "pyyaml>=6.0",   # for CI YAML validation
+]
+
+# ---------------------------------------------------------------------------
+# Tool configuration
+# ---------------------------------------------------------------------------
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scripts*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]   # line length — docstrings with benchmark tables are intentionally wide
+
+[tool.pytest.ini_options]
+testpaths   = ["scripts"]
+python_files = ["test_*.py"]
