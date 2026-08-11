@@ -31,7 +31,7 @@ jobs:
         # Only the core dependency needed to run the unit tests.
         # Engine venvs (~3.4 GB) are not installed in CI — the unit tests
         # cover all gate arithmetic without requiring any PDF fixtures or models.
-        run: pip install pypdfium2
+        run: pip install pypdfium2 pyyaml
 
       - name: Run unit tests
         run: python scripts/test_quality_gates.py
