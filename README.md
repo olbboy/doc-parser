@@ -86,10 +86,17 @@ expected JSON asserts, so you can substitute your own:
 
 `scripts/test_quality_gates.py` needs no PDFs at all and covers the gate arithmetic.
 
-## Notes
+## Documentation
 
-`SKILL.md` is the working document and is written in Vietnamese; it carries the full
-routing table, the flag semantics, and the reasoning behind each threshold.
+| File | What it answers |
+|---|---|
+| [`SKILL.md`](SKILL.md) | The working reference: routing table, flag semantics, index policy, and the reasoning behind each threshold |
+| [`docs/document-parsing-field-notes.md`](docs/document-parsing-field-notes.md) | **What was measured** — engine behaviour, install traps, Vietnamese OCR results, licensing, and the seven conclusions the measurements reversed |
+| [`docs/measurement-driven-upgrade-playbook.md`](docs/measurement-driven-upgrade-playbook.md) | **How to change it safely** — measure before deciding, metric design, fixtures, versioning |
+
+These are written in Vietnamese. The field notes are the place to start if you are
+choosing a parser rather than using this one: several of its conclusions contradict what
+the tools' own documentation claims.
 
 ## License
 
