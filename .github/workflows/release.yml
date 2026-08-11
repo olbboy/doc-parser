@@ -59,7 +59,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build
+        run: pip install build "setuptools>=72" wheel
 
       - name: Build distribution
         run: python -m build --sdist --wheel
