@@ -11,55 +11,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [1.0.1] — 2026-08-11
-
-### Added
-
-- **`README_AI.md`** — dedicated AI agent bootstrap file (step-by-step setup, routing
-  instructions, critical rules, document map, example report format). Inspired by the
-  `README_AI.md` pattern in purpose-built skill routers like reverse-skill.
-- **`AGENTS.md`** — platform-neutral AI entry point: 30-second routing summary and hard
-  rules for any compatible AI client (Claude Code, Cursor, Cline, Codex, …).
-- **`CLAUDE.md`** — Claude Code-specific instruction file, auto-loaded by Claude Code;
-  provides quick orientation, hard rules, test commands, and file map.
-- **`README_vi.md`** — native Vietnamese README mirroring the English README. The field
-  notes and playbook are already in Vietnamese; the README now is too.
-- **`VERSION`** — standalone plaintext version file; machine-readable single source of
-  truth alongside `pyproject.toml` and git tags.
-- **`.gitattributes`** — enforces LF on `.sh/.py/.json/.md/.yml/.toml` and CRLF on
-  `.ps1/.bat`; prevents mixed-EOL commits that dirty `git status` on fresh clones.
-- **`examples/parse-datasheet/README.md`** — end-to-end walkthrough: probe, parse, read
-  frontmatter, make index decision. Exercises the borderless-spec-table failure mode.
-- **`docs/assets/doc-parser.png`** — project logo icon for the README header.
-- **Centered README layout** — logo, tagline, badge row, and navigation link bar all
-  centered with HTML `<p align="center">`. Follows modern open source README standards.
-- **`🌐 Tiếng Việt` nav link** in the English README pointing to `README_vi.md`.
-- **`back to top` links** at every major section of the README.
-- **AI agent callout** at the top of the About section pointing to `README_AI.md`.
-
-### Changed
-
-- `README.md` fully rewritten with centered layout, logo, nav links, i18n link, AI
-  bootstrap pointer, and `back to top` links throughout.
-- `.gitignore` expanded: venvs, IDE files, OS artefacts (`.DS_Store`, `Thumbs.db`),
-  coverage artefacts, MinerU `output/` scratch directory.
-
----
-
-
 ## [2.0.0] — 2026-08-11
 
 ### Changed
 
-- **Breaking:** `high_value_recall` now counts *presence* (is this type of token anywhere in the output?)
-  instead of *frequency* (how many occurrences survived?). Same document, same engine — the score
-  changes. Version bumped to major because any threshold written against v1.x needs re-verification.
-  Background: the old counting method produced 3/3 false alarms on 12 documents; the new method
-  catches both true losses (0.842 and 0.032) and silences all false alarms.
-- `TEXT_RECALL_LOW` can no longer be downgraded to `TEXT_RECALL_WATCH` solely because `high_value_recall`
-  is intact. A content-dead page (`page_recall < 0.50` **and** `page_absent ≥ 0.10`) vetoes the
-  downgrade — validated on `V5 UL9540A.pdf` where 5 pages (322 words) disappeared while model
-  codes remained intact.
+- **Breaking:** `high_value_recall` now counts *presence* (is this type of token anywhere in the
+  output?) instead of *frequency* (how many occurrences survived?). Same document, same engine —
+  the score changes. Version bumped to major because any threshold written against v1.x needs
+  re-verification. Background: the old counting method produced 3/3 false alarms on 12 documents;
+  the new method catches both true losses (0.842 and 0.032) and silences all false alarms.
+- `TEXT_RECALL_LOW` can no longer be downgraded to `TEXT_RECALL_WATCH` solely because
+  `high_value_recall` is intact. A content-dead page (`page_recall < 0.50` **and**
+  `page_absent ≥ 0.10`) vetoes the downgrade — validated on `V5 UL9540A.pdf` where 5 pages
+  (322 words) disappeared while model codes remained intact.
 
 ### Added
 
@@ -112,6 +76,39 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.1] — 2026-08-11
+
+### Added
+
+- **`README_AI.md`** — dedicated AI agent bootstrap file (step-by-step setup, routing
+  instructions, critical rules, document map, example report format).
+- **`AGENTS.md`** — platform-neutral AI entry point: 30-second routing summary and hard
+  rules for any compatible AI client (Claude Code, Cursor, Cline, Codex, …).
+- **`CLAUDE.md`** — Claude Code-specific instruction file, auto-loaded by Claude Code;
+  provides quick orientation, hard rules, test commands, and file map.
+- **`README_vi.md`** — native Vietnamese README mirroring the English README.
+- **`VERSION`** — standalone plaintext version file; machine-readable single source of
+  truth alongside `pyproject.toml` and git tags.
+- **`.gitattributes`** — enforces LF on `.sh/.py/.json/.md/.yml/.toml` and CRLF on
+  `.ps1/.bat`; prevents mixed-EOL commits that dirty `git status` on fresh clones.
+- **`examples/parse-datasheet/README.md`** — end-to-end walkthrough: probe, parse, read
+  frontmatter, make index decision. Exercises the borderless-spec-table failure mode.
+- **`docs/assets/doc-parser.png`** — project logo icon for the README header.
+- **Centered README layout** — logo, tagline, badge row, and navigation link bar all
+  centered with HTML `<p align="center">`. Follows modern open source README standards.
+- **`🌐 Tiếng Việt` nav link** in the English README pointing to `README_vi.md`.
+- **`back to top` links** at every major section of the README.
+- **AI agent callout** at the top of the About section pointing to `README_AI.md`.
+
+### Changed
+
+- `README.md` fully rewritten with centered layout, logo, nav links, i18n link, AI
+  bootstrap pointer, and `back to top` links throughout.
+- `.gitignore` expanded: venvs, IDE files, OS artefacts (`.DS_Store`, `Thumbs.db`),
+  coverage artefacts, MinerU `output/` scratch directory.
+
+---
+
 ## [1.0.0] — 2026-08-10
 
 ### Added
@@ -128,9 +125,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-[Unreleased]: https://github.com/olbboy/doc-parser/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/olbboy/doc-parser/compare/v2.0.0...v1.0.1
+[Unreleased]: https://github.com/olbboy/doc-parser/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/olbboy/doc-parser/compare/v1.1.0...v2.0.0
-[1.1.0]: https://github.com/olbboy/doc-parser/compare/v1.0.0...v1.1.0
+[1.1.0]: https://github.com/olbboy/doc-parser/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/olbboy/doc-parser/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/olbboy/doc-parser/releases/tag/v1.0.0
-

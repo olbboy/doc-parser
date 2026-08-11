@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write   # needed to create GitHub Releases
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so git describe works
+
+      # ── Extract release notes for this version from CHANGELOG.md ──────────
+      - name: Extract release notes
+        id: notes
+        shell: python
+        run: |
+          import re, os, sys
+
+          tag = os.environ["GITHUB_REF_NAME"]          # e.g. "v2.0.0"
+          version = tag.lstrip("v")                    # e.g. "2.0.0"
+
+          changelog = open("CHANGELOG.md").read()
+
+          # Match the section for this version:
+          #   ## [2.0.0] — 2026-08-11
+          #   ...content...
+          #   ## [1.1.0]  ← stop here
+          pattern = (
+              r"## \[" + re.escape(version) + r"\].*?\n"
+              r"(.*?)"
+              r"(?=\n## \[|\Z)"
+          )
+          m = re.search(pattern, changelog, re.DOTALL)
+          if not m:
+              print(f"::error::Version {version} not found in CHANGELOG.md")
+              sys.exit(1)
+
+          notes = m.group(1).strip()
+          # Write to $GITHUB_OUTPUT (multi-line safe via delimiter)
+          delimiter = "EOF_NOTES"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"notes<<{delimiter}\n{notes}\n{delimiter}\n")
+              fh.write(f"version={version}\n")
+
+      # ── Build source distribution ──────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build distribution
+        run: python -m build --sdist --wheel
+
+      # ── Create GitHub Release ─────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ steps.notes.outputs.version }}"
+          body: ${{ steps.notes.outputs.notes }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
