@@ -166,6 +166,86 @@ check("None does not corroborate a drop",
 check("None does not suppress an alarm",
       qg.high_value_intact({"high_value_recall": None}) is not True, True)
 
+# --- readable text ----------------------------------------------------------
+# `PI STATION261 · Hướng dẫn sử dụng.pdf` has a broken ToUnicode CMap: the text
+# layer reads `(XURSHDQ JHQHUDO` where the page shows `European general`, every
+# code shifted by 29. Recall cannot see it — the reference *is* the corrupt layer,
+# so both sides agree and the file scored text_recall 0.986 with no flag at all.
+_SHIFT = lambda t: "".join(chr(ord(c) - 29) if "a" <= c <= "z" or "A" <= c <= "Z" else c for c in t)
+_EN = "the system shall be installed with this bracket and it can not be used for that "
+_VI = "hệ thống này phải được lắp với giá đỡ và không thể dùng cho việc khác của các "
+
+check("mojibake scores near zero", qg.readable_ratio(_SHIFT(_EN) * 30) < 0.01, True)
+check("mojibake trips the threshold",
+      qg.readable_ratio(_SHIFT(_EN) * 30) < qg.READABLE_RATIO_MIN, True)
+check("plain english is far above", qg.readable_ratio(_EN * 30) > 0.5, True)
+# `max` of the two hit-rates, not their sum: a purely Vietnamese document must not
+# be punished for carrying no English function words.
+check("plain vietnamese is far above", qg.readable_ratio(_VI * 30) > 0.5, True)
+# The three CJK-heavy files in the corpus score 0.20-0.23 because they are bilingual;
+# CJK characters are not Latin words, so they neither help nor hurt the ratio.
+check("cjk alongside english does not drag the ratio down",
+      qg.readable_ratio("电池系统安装说明书 " + _EN * 30) > 0.5, True)
+# Too few Latin words to judge. Callers must not read None as "readable" — a pure
+# CJK document lands here and is simply not judged.
+check("short text is unjudgeable", qg.readable_ratio(_EN), None)
+check("pure cjk is unjudgeable", qg.readable_ratio("电池系统安装说明书 " * 100), None)
+check("exactly at the token floor is judged",
+      qg.readable_ratio("the " * qg.MIN_READABLE_TOKENS) is not None, True)
+check("one token short is not",
+      qg.readable_ratio("the " * (qg.MIN_READABLE_TOKENS - 1)), None)
+# Greek and Cyrillic must not be counted as Latin words: a wider character range
+# would score a Russian document near zero and call it mojibake.
+check("cyrillic is not counted as latin",
+      qg.readable_ratio("привет мир документация " * 100), None)
+
+
+# --- table shape ------------------------------------------------------------
+# Column raggedness looked like the metric and is not one: across 186 corpus tables
+# the median off-modal ratio is 0.000, because engines emit column-consistent grids
+# even when the content is nonsense. An earlier ad-hoc measurement said 70% ragged;
+# it stripped every leading and trailing pipe greedily, so `||Normal OFF||||` counted
+# as one cell instead of five. What actually separates engines is blankness: on the
+# same two manuals Docling leaves a median 0.02 and 0.00 of cells empty, anydoc 0.18
+# and 0.12, and anydoc on a book of bar charts reaches 0.44.
+EVEN = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |"
+SHREDDED = "| a | b | c | d |\n|---|---|---|---|\n| x |  |  |  |\n|  |  | y |  |\n|  | z |  |  |"
+RAGGED = "| a | b |\n|---|---|\n| 1 | 2 | 3 | 4 |\n| 5 |\n| 6 | 7 | 8 | 9 |"
+
+check("even table is clean", qg.table_defect_share(EVEN), 0.0)
+check("mostly blank table is defective", qg.table_defect_share(SHREDDED), 1.0)
+check("rows disagreeing on width are defective", qg.table_defect_share(RAGGED), 1.0)
+check("no tables at all", qg.table_defect_share("just prose, no pipes"), None)
+# Exactly one leading and one trailing pipe come off, never all of them: the greedy
+# strip is what produced the false 70% reading.
+check("edge empty cells are counted, not swallowed",
+      qg.parse_md_tables("||Normal OFF||||\n||Alarm ON||||")[0][0], ["", "Normal OFF", "", "", ""])
+check("escaped pipe stays inside its cell",
+      qg.parse_md_tables(r"| a\| b | c |" + "\n| d | e |")[0][0], [r"a\| b", "c"])
+# A shell session that prints a pipe-delimited line is not a table.
+check("fenced code is not a table",
+      qg.table_defect_share("```\n| a | b | c |\n| x |\n```"), None)
+# A fence between two tables must end the first one. Without the flush the two merged
+# into a single block and the width change between them read as raggedness — a false
+# positive, which is the direction a gate can least afford.
+check("a fence separates two tables instead of merging them",
+      [[len(r) for r in t] for t in
+       qg.parse_md_tables("| a | b |\n| c | d |\n```\ncode\n```\n| e | f | g |\n| h | i | j |")],
+      [[2, 2], [3, 3]])
+check("two tables across a fence are both clean",
+      qg.table_defect_share("| a | b |\n| c | d |\n```\ncode\n```\n| e | f | g |\n| h | i | j |"), 0.0)
+# One row is not enough for a modal width to mean anything.
+check("single-row block is not a table", qg.parse_md_tables("| a | b |"), [])
+# A legitimately sparse spec table must survive: 4 of 12 cells blank is 0.33.
+SPARSE = ("| Model | Value | Note |\n|---|---|---|\n| A | 5 |  |\n| B |  |  |\n| C | 7 | ok |")
+check("a sparse but real table is not defective", qg.table_defect_share(SPARSE), 0.0)
+# A row of nothing but blanks and pipes is indistinguishable from a separator by
+# shape, so it is dropped as one. That makes the blank ratio a slight *under*-count
+# of shredding — the conservative direction for a gate that only audits.
+check("an all-blank row is read as a separator",
+      len(qg.parse_md_tables("| a | b |\n|   |   |\n| c | d |")[0]), 2)
+
+
 # --- page markers are a gate input, not an artifact feature -----------------
 # The written body has its markers stripped, so re-running the gate on a saved .md
 # silently takes the whole-document fallback and answers a different question. That

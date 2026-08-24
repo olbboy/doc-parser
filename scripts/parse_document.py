@@ -326,6 +326,23 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
         if info["tier"] in ("T2", "T3"):
             flags.append("LAYOUT_RISK_UNADDRESSED")
 
+    # Both readings below are engine-agnostic and score the *output* rather than the
+    # source, which is how they see what the recall gates structurally cannot. Recall
+    # compares the output against the PDF's own text layer, so when that layer is the
+    # corrupt side both halves agree and a mojibake file scores 0.986; and no gate has
+    # ever looked at whether the tables in the output are tables at all.
+    if md:
+        readable = quality_gates.readable_ratio(md)
+        if readable is not None:
+            info["readable_ratio"] = readable
+            if readable < quality_gates.READABLE_RATIO_MIN:
+                flags.append("MOJIBAKE_SUSPECT")
+        share = quality_gates.table_defect_share(md)
+        if share is not None:
+            info["table_defect_share"] = share
+            if share > quality_gates.TABLE_DEFECT_SHARE:
+                flags.append("TABLE_STRUCTURE_BROKEN")
+
     out = output_path(path, outdir)
     out.parent.mkdir(parents=True, exist_ok=True)
     fm = {"source_file": pathlib.Path(path).name, "doc_kind": info["kind"],
@@ -333,6 +350,8 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
           "parser": used, "parser_tier": info["tier"], "parser_reason": info["reason"],
           "text_recall": info.get("text_recall"),
           "high_value_recall": info.get("high_value_recall"),
+          "readable_ratio": info.get("readable_ratio"),
+          "table_defect_share": info.get("table_defect_share"),
           "repaired_pages": info.get("repaired_pages"),
           "dropped_pages": info.get("dropped_pages"),
           "high_value_recovered": info.get("high_value_recovered"),

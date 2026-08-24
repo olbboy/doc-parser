@@ -32,6 +32,33 @@ MIN_PAGE_TYPES = 12          # distinct words a page needs before its ratio is s
 TEXT_RECALL_LOW = 0.95
 TEXT_RECALL_WATCH = 0.98
 
+# A PDF whose ToUnicode CMap is broken emits glyph indices instead of Unicode:
+# `(XURSHDQ JHQHUDO` is `European general` shifted by 29. The recall gates above
+# cannot see this. They compare the output against the PDF's own text layer, and
+# when that layer is itself the corrupt side both halves agree — `PI STATION261 ·
+# Hướng dẫn sử dụng` scored text_recall 0.986 over 13,324 tokens of garbage and
+# carried no flag. This asks the question recall never asks: is the text a language?
+READABLE_RATIO_MIN = 0.02     # below: the words are not function words of any language
+MIN_READABLE_TOKENS = 200     # fewer Latin words than this and the ratio is noise
+
+# No gate has ever looked at table shape. `PANDAS_NOISE` only sniffs for NaN and
+# Unnamed:, and only for two of the four engines, so an engine that invents tables
+# out of bar charts passes clean: `Storytelling with Data - P1` scored text_recall
+# 0.996 with no flag while 27 of its 72 "tables" are more than half empty, because
+# anydoc shredded chart axes and legends into pipe grids.
+#
+# Column raggedness is the obvious metric and a dead one: across 186 corpus tables
+# the median off-modal ratio is 0.000 and only 2 exceed 0.25, since engines emit
+# column-consistent grids even when the content inside is nonsense. What separates a
+# real table from a shredded chart is how much of the grid is *empty*. Same sources,
+# two engines: anydoc leaves a median 0.15 of cells blank against Docling's 0.00, and
+# is the blanker engine on 10 documents out of 10. The emptiness is an artifact of
+# the engine, not of the document, which is what makes it a usable signal.
+TABLE_EMPTY_CELL_MAX = 0.50   # per table: share of blank cells before it counts as shredded
+TABLE_OFF_MODAL_MAX = 0.25    # per table: rows disagreeing on column count — rare but real
+TABLE_DEFECT_SHARE = 0.25     # per document: share of defective tables before flagging
+MIN_TABLE_BODY_ROWS = 2       # fewer rows and "modal width" is not a majority of anything
+
 # Engines disagree on check-mark glyphs (MinerU normalises √ to ✓); fold them so a
 # table full of ticks does not read as a recall failure.
 _GLYPH = {"✓": "√", "✔": "√", "☑": "√", "✅": "√", "–": "-", "—": "-", "’": "'"}
@@ -80,6 +107,123 @@ def normalize(text):
 
 def words(text, minlen=2):
     return Counter(w for w in re.findall(r"\w+", normalize(text), re.UNICODE) if len(w) >= minlen)
+
+
+# Latin letters only. Deliberately excludes Greek and Cyrillic, which a wider
+# `À-ỹ` range would swallow: a Russian document would then score near zero and be
+# mistaken for mojibake. × (U+00D7) and ÷ (U+00F7) are cut out of the range because
+# they sit among the letters and would glue "a×b" into one token.
+_LATIN_WORD = re.compile(r"[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F\u1E00-\u1EFF]{2,}")
+_STOPWORDS_EN = frozenset("the and of to in for is are with this be on or as by from at "
+                          "that it can not will has have shall must if when each".split())
+_STOPWORDS_VI = frozenset("và của các là trong cho với này được không khi một những để "
+                          "có thể theo từ đến hoặc phải nếu sau trước".split())
+
+
+def readable_ratio(text):
+    """Share of Latin words that are common function words. None when unjudgeable.
+
+    Measured over 35 T0 documents of the Pytes corpus: the one file with a broken
+    ToUnicode CMap scores 0.001, the lowest *legitimate* document 0.078, ordinary
+    documents 0.17 – 0.25 — a 78x gap, so the threshold sits far from both sides.
+
+    Bilingual CJK documents were the worry and are not a problem: the three
+    CJK-heavy files score 0.20 – 0.23, because they carry English alongside the
+    Chinese and the Chinese characters are not counted as words at all.
+
+    `max` of the two hit-rates rather than their sum, so a purely Vietnamese
+    document is not punished for lacking English function words.
+
+    None when there are too few Latin words to judge — a pure CJK or Arabic
+    document lands there, and callers must not read None as "readable".
+    """
+    toks = [t.lower() for t in _LATIN_WORD.findall(text)]
+    if len(toks) < MIN_READABLE_TOKENS:
+        return None
+    c = Counter(toks)
+    return round(max(sum(c[w] for w in _STOPWORDS_EN),
+                     sum(c[w] for w in _STOPWORDS_VI)) / len(toks), 3)
+
+
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_TABLE_SEP = re.compile(r"^[\s|:\-]+$")
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")          # a cell may contain an escaped pipe
+
+
+def parse_md_tables(md):
+    """Body rows of every markdown table in `md`, each row as a list of cells.
+
+    Separator rows are dropped — they carry no content, and their width is not
+    independent evidence of anything. Fenced code is skipped whole: a shell session
+    that prints a pipe-delimited line is not a table.
+
+    Exactly one leading and one trailing pipe is removed, not every one of them.
+    `||Survey Results||||100%|` opens with an empty cell, and stripping greedily
+    would hide the very raggedness this is here to count.
+    """
+    tables, cur, fenced = [], [], False
+
+    def flush():
+        # A fence line ends the table above it exactly as a line of prose does.
+        # Leaving it out merged two unrelated tables across a code block and read
+        # the width change between them as raggedness — a false positive.
+        if len(cur) >= MIN_TABLE_BODY_ROWS:
+            tables.append(list(cur))
+        cur.clear()
+
+    for line in md.splitlines():
+        if _FENCE.match(line):
+            fenced = not fenced
+            flush()
+            continue
+        if fenced:
+            continue
+        s = line.strip()
+        if len(s) > 1 and s.startswith("|") and s.endswith("|"):
+            if not _TABLE_SEP.match(s):
+                cur.append([c.strip() for c in _CELL_SPLIT.split(s[1:-1])])
+            continue
+        flush()
+    flush()
+    return tables
+
+
+def table_defect_share(md):
+    """Share of the document's tables that are structurally defective. None if no tables.
+
+    A table is defective when it is mostly blank (`TABLE_EMPTY_CELL_MAX`) or when its
+    rows disagree on how many columns they have (`TABLE_OFF_MODAL_MAX`). The first
+    catches an engine shredding a chart, a bulleted list or an address block into a
+    grid; the second catches a genuinely malformed table, which is rare — 2 of 186.
+
+    Calibrated on 10 documents parsed twice, once per engine. The share itself is a
+    blunt instrument: it never exceeds 0.143 for anydoc or 0.053 for Docling on real
+    technical documents, so on this corpus the flag fires on exactly one file — a book
+    of bar charts anydoc shredded into 72 fake tables, at 0.389. Narrow coverage is the
+    intended trade: zero false positives across 20 parses.
+
+    The underlying blankness separates far more sharply than the flag does — median
+    blank cells per table run 0.15 for anydoc against 0.00 for Docling, and anydoc is
+    the blanker engine on 10 of 10 documents. That gap answers "was a better engine
+    available", which is a routing question, not "is this output broken". Keeping the
+    two apart is deliberate; a flag on the first would fire on most T0 output.
+
+    Table counts do not settle it either way: Docling finds more tables on the two
+    manuals (19 vs 16, 15 vs 11) but fewer on several certificates (1 vs 11, 4 vs 7).
+    """
+    tables = parse_md_tables(md)
+    if not tables:
+        return None
+    defective = 0
+    for rows in tables:
+        widths = [len(r) for r in rows]
+        modal = max(set(widths), key=widths.count)
+        off_modal = sum(1 for w in widths if w != modal) / len(widths)
+        cells = [c for r in rows for c in r]
+        blank = sum(1 for c in cells if not c) / len(cells) if cells else 0
+        if blank > TABLE_EMPTY_CELL_MAX or off_modal > TABLE_OFF_MODAL_MAX:
+            defective += 1
+    return round(defective / len(tables), 3)
 
 
 def recall(ref, hyp):
