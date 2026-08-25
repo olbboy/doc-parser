@@ -77,7 +77,7 @@ User task
 |---|---|---|
 | `DOCPARSE_HOME` | `~/.local/share/doc-parse` | Point to custom venv root |
 | `DOCPARSE_MINERU_URL` | `http://127.0.0.1:8123` | Different MinerU API port |
-| `DOCPARSE_CORPUS_ROOT` | *(none)* | Path to a wider corpus for threshold work |
+| `DOCPARSE_CORPUS_ROOT` | *(none)* | Default corpus root for `scripts/scan_unit_variants.py` only — the parser never reads it |
 
 ---
 

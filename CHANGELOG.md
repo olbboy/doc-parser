@@ -9,6 +9,77 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- `region_dropped_pages()` skipped pages by *distinct word types* while `evaluate()`
+  scores them by *total occurrences*. A page of repeated technical tokens — the exact
+  profile of a nameplate table — could get a real sub-threshold page recall and still be
+  excluded from region-drop detection, so `REGION_DROPPED` never fired and the page-fill
+  repair never ran. Both now use the same `MIN_PAGE_WORDS` definition.
+- The high-value inject read `(high_value_recall or 1)`, turning a real `0.0` — every
+  model code and unit gone, the worst case the inject exists for — into "unmeasured" and
+  skipping the repair. Replaced by `needs_hv_inject()`, which distinguishes `0.0` from `None`.
+- A file the prober could not open (corrupt, encrypted, wrong extension) raised `KeyError`
+  in `route()` and killed the whole batch. It now routes to the broadest engine, carries
+  `PROBE_FAILED`, and `main()` isolates a per-file crash instead of aborting the run.
+- Page-marker segments are now validated against the PDF's real page count
+  (`aligned_pages()`). Docling emits a break only between pages that produced items, so a
+  page yielding none shifted every later segment onto the wrong physical page — scoring
+  and repairing against a neighbour.
+- `split_blocks()` glued a donor table to the prose after it across a blank line; the
+  merged block's mixed vocabulary then mapped to the wrong page.
+- `recover()` reported a page as repaired even when the bounds guard wrote nothing,
+  turning a silent drop into a clean-looking `repaired_pages`.
+- `run_gates()` swallowed every gate exception and returned `{}`, indistinguishable from
+  "nothing to score". Failures now surface as `GATE_EVAL_FAILED` plus a `gate_error` field.
+- `--tier` was accepted, threaded through and never applied, leaving T3 (MinerU
+  `hybrid-engine`) unreachable by any documented means. It now selects the tier's engine,
+  rejects unknown tiers, and disables Docling pre-batching so it cannot override the choice.
+- `run_docling_batch()` split on a plain-text sentinel without checking the result count;
+  a document containing that string silently shifted output onto the wrong source file.
+- `_run()` raised `IndexError` instead of `RuntimeError` when a failed subprocess emitted
+  only whitespace; the `pages` frontmatter field dropped a legitimate `0`.
+- `pyproject.toml`: the `anydoc` extra named a package that is published as
+  `firecrawl-anydoc`, and the `mineru` extra omitted `six`/`requests` — the undeclared
+  dependency whose absence surfaces as a misleading `HybridDependencyError`.
+- `scan_unit_variants.py` now reads `DOCPARSE_CORPUS_ROOT`, which every README documented
+  but no script had ever read.
+
+### Added
+
+- `PROBE_FAILED` and `GATE_EVAL_FAILED` quality flags — **audit-only**, like
+  `MOJIBAKE_SUSPECT` and `TABLE_STRUCTURE_BROKEN`; not in the index block-list until
+  there is more than one calibration positive each.
+- `PROBE_FAILED_UNVERIFIED` — the first new **blocking** flag: the probe could not open
+  the file *and* `readable_ratio` could not be measured, so nothing says the output is
+  text. `PROBE_FAILED` alone deliberately does not block: measured on three files that
+  all carry it, two are garbage (`%PDF-1.4 broken garbage`, `not a pdf`) and the third is
+  a good PDF saved under an `.xlsx` name that parses in full at `readable_ratio` 0.329.
+  Known cost: a short or non-Latin document also yields no ratio, so a failed probe on
+  one blocks it. Calibrated on three files — widen before bulk reliance.
+- Release workflow asserts the pushed tag matches `pyproject.toml` and `VERSION` before
+  building, and CI runs `ruff` against the repo's own config.
+- Unit tests covering every fix above, each verified by mutation (reverting the fix turns
+  the test red). `region_dropped_pages()`, `aligned_pages()` and `split_blocks()` had no
+  coverage at all before.
+
+### Documentation
+
+- Flag tables in `README.md`, `README_vi.md` and `docs/SKILL.md` now list every flag the
+  code actually emits, including `NEEDS_OCR` and `LAYOUT_RISK_MEDIUM`.
+- `docs/SKILL.md` quick-start used a `.claude/skills/doc-parse/scripts` path that does not
+  exist in this repo; its "known limitations" section still called mojibake unaddressed
+  and cited a filter rule that was never in the code.
+- `DOCPARSE_CORPUS_ROOT` is documented as belonging to `scan_unit_variants.py`, not the parser.
+- `README.md` and `README_vi.md` state that **T3 is never routed automatically** — the probe
+  measures nothing that implies a real `colspan` or a formula, and T3 is 12× slower than T2.
+- `docs/SKILL.md` records a third known limitation: `normalize()` folds unit spacing but not
+  spacing inside certification standards, so `IEC 62619` against `IEC62619` scores
+  `high_value_recall` 0.000 with nothing actually lost. Measurement shows the folding rule
+  would be a no-op except on disagreement and would not dilute the token bag; what is still
+  missing is evidence that any engine disagrees. Measure with `scan_unit_variants.py` first.
+- `run_regression.py` points at `testdata/README.md` when a fixture is missing.
+
 ---
 
 ## [2.0.1] — 2026-08-11

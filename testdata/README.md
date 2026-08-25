@@ -41,5 +41,7 @@ $HOME/.local/share/doc-parse/lite/bin/python scripts/run_regression.py
 `scripts/test_quality_gates.py` needs no PDFs at all and covers the gate arithmetic,
 including the threshold neighbourhoods the corpus never exercised.
 
-A wider corpus, for threshold work rather than regression, can be pointed at through
-`DOCPARSE_CORPUS_ROOT`; the default gate always runs on these three.
+A wider corpus, for threshold work rather than regression, is what
+`scripts/scan_unit_variants.py` reads — pass it as an argument or set
+`DOCPARSE_CORPUS_ROOT`. The regression gate always runs on these three fixtures and
+ignores that variable.

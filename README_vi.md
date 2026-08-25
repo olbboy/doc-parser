@@ -131,13 +131,32 @@ $DP scripts/parse_document.py report.pdf -o out/
 | `HIGH_VALUE_RECOVERED` | Đã kéo lại được mã/đơn vị từ text layer | Dấu vết kiểm toán |
 | `REGION_DROPPED` | Engine vứt một vùng — **đã tự vá** | Xem `repaired_pages` |
 | `TEXT_RECALL_WATCH` | Mất 2–5%, token quan trọng còn nguyên | Ghi nhận, index bình thường |
+| `MOJIBAKE_SUSPECT` | Văn bản không phải ngôn ngữ nào — ToUnicode hỏng | Rà tay; recall không thấy được |
+| `TABLE_STRUCTURE_BROKEN` | > 25% bảng trong output bị băm (phần lớn ô rỗng) | Đổi sang engine layout-aware |
+| `PROBE_FAILED` | Probe không mở được file (hỏng, mã hoá, sai đuôi) | Rà tay — engine là dự phòng, không phải lựa chọn |
+| `PROBE_FAILED_UNVERIFIED` | Probe lỗi **và** output không đọc được như một ngôn ngữ | **Không index** — không gì xác nhận đây là chữ |
+| `GATE_EVAL_FAILED` | Gate recall ném lỗi, không có `text_recall` để tin | Rà tay — vắng số đo khác với đạt ngưỡng |
 
 ### Chính sách index
 
 ```
 Chặn:  PARSE_FAILED · EMPTY_SUCCESS · TEXT_RECALL_LOW · HIGH_VALUE_MISSING
+       · PROBE_FAILED_UNVERIFIED
 Cho qua: mọi thứ còn lại — WATCH · REGION_DROPPED · HIGH_VALUE_RECOVERED là dấu vết kiểm toán
 ```
+
+**`PROBE_FAILED` một mình không chặn.** Đo trên ba file cùng mang cờ này: `corrupt.pdf`
+cho ra `%PDF-1.4 broken garbage`, `fake.xlsx` cho ra `not a pdf`, còn một PDF tốt bị lưu
+nhầm đuôi `.xlsx` cho ra đủ nội dung với `readable_ratio` 0,329. Chặn theo cờ đó sẽ loại
+oan file thứ ba. `PROBE_FAILED_UNVERIFIED` chỉ bắn khi probe lỗi **và** không chấm nổi
+`readable_ratio` — đó mới là thứ phân biệt hai ca đầu với ca thứ ba.
+
+Cái giá đã biết: tài liệu quá ngắn hoặc không dùng chữ Latin cũng không chấm được
+`readable_ratio`, nên probe lỗi trên loại file đó sẽ bị chặn. Hiệu chỉnh trên ba file —
+cần đo rộng hơn trước khi tin dùng hàng loạt.
+
+Bốn cờ `MOJIBAKE_SUSPECT`, `TABLE_STRUCTURE_BROKEN`, `PROBE_FAILED`, `GATE_EVAL_FAILED`
+vẫn **chỉ audit, chưa chặn index** — mỗi cờ mới có một ca dương tính trong bằng chứng.
 
 ---
 
@@ -157,7 +176,11 @@ Cho qua: mọi thứ còn lại — WATCH · REGION_DROPPED · HIGH_VALUE_RECOVE
 |---|---|---|
 | `DOCPARSE_HOME` | `~/.local/share/doc-parse` | Gốc cho tất cả engine venv và model cache |
 | `DOCPARSE_MINERU_URL` | `http://127.0.0.1:8123` | URL của `mineru-api` thường trú |
-| `DOCPARSE_CORPUS_ROOT` | *(không có)* | Path đến corpus rộng hơn cho hiệu chỉnh ngưỡng |
+| `DOCPARSE_CORPUS_ROOT` | *(không có)* | Corpus mặc định cho `scripts/scan_unit_variants.py` (hiệu chỉnh ngưỡng; parser không đọc biến này) |
+
+**T3 không bao giờ được router tự chọn** — chỉ tới được bằng `--tier T3`. Probe đo số
+trang, ký tự, nét vẽ và ảnh; không tín hiệu nào nói bảng có `colspan` thật hay công thức.
+T3 chậm hơn T2 12× (100 trang: ~10 phút so với ~48 giây).
 
 ---
 

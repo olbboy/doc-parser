@@ -25,7 +25,10 @@ $DP scripts/parse_document.py <file> -o out/
 - **Never call `mineru` CLI in a loop** — use the HTTP service (0.03 s vs 6.4 s/file).
 - **Never split Docling across separate processes** — batch into one call.
 - **Never change a threshold without measuring** — see `docs/measurement-driven-upgrade-playbook.md`.
-- **Do not index** files flagged `EMPTY_SUCCESS`, `PARSE_FAILED`, `TEXT_RECALL_LOW`, or `HIGH_VALUE_MISSING`.
+- **Do not index** files flagged `EMPTY_SUCCESS`, `PARSE_FAILED`, `TEXT_RECALL_LOW`,
+  `HIGH_VALUE_MISSING`, or `PROBE_FAILED_UNVERIFIED`.
+- `PROBE_FAILED` on its own is an audit trail, **not** a block — a good PDF saved under the
+  wrong extension lands there and parses fine.
 
 ## Testing
 

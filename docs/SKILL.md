@@ -8,7 +8,7 @@ keywords: [pdf, docx, xlsx, pptx, markdown, ocr, rag, docling, mineru, anydoc, m
 argument-hint: "<file-or-glob> [-o outdir] [--dry-run]"
 metadata:
   author: BLVERA
-  version: "2.0.0"
+  version: "2.0.1"
 ---
 
 # doc-parse — chọn engine theo tài liệu, không theo thói quen
@@ -17,17 +17,24 @@ Bốn công cụ, không cái nào thắng mọi ca. Skill này **probe file tr�
 
 ## Dùng
 
+Đường dẫn dưới đây tính từ gốc repo. Nếu skill được cài vào `.claude/skills/doc-parse/`
+thì thay `S=.claude/skills/doc-parse/scripts`.
+
 ```bash
 DP=$HOME/.local/share/doc-parse/lite/bin/python
-S=.claude/skills/doc-parse/scripts
+S=scripts
 
 $DP $S/probe_document.py file.pdf                 # chỉ xem sẽ đi tier nào
 $DP $S/parse_document.py *.pdf *.xlsx -o parsed/  # parse thật
 $DP $S/parse_document.py docs/*.pdf -o out/ --dry-run   # xem kế hoạch cho cả lô
 $DP $S/parse_document.py file.pdf -o out/ --engine docling   # ép engine
+$DP $S/parse_document.py file.pdf -o out/ --tier T3          # ép bậc (T3 = mineru hybrid)
 ```
 
-Cài engine lần đầu: `bash .claude/skills/doc-parse/scripts/setup-engines.sh` (~3,4 GB venv + ~2 GB model, tải một lần).
+Cài engine lần đầu: `bash scripts/setup-engines.sh` (~3,4 GB venv + ~2 GB model, tải một lần).
+
+`--tier` ép cả bậc lẫn engine mặc định của bậc đó; `--engine` ghi đè lên `--tier`.
+**T3 chỉ tới được bằng `--tier T3`** — router không bao giờ tự chọn nó.
 
 ## Bậc thang
 
@@ -99,15 +106,39 @@ Mỗi file ra kèm YAML frontmatter: `parser`, `parser_tier`, `parser_reason`, `
 | `HIGH_VALUE_RECOVERED` | đã kéo lại được mã/đơn vị/chuẩn bị mất từ text layer | xem `high_value_recovered` |
 | `REGION_DROPPED` | engine vứt cả một vùng có chữ; **đã tự vá** | xem `repaired_pages` |
 | `REGION_DROPPED_UNREPAIRED` | phát hiện vùng bị vứt nhưng không vá được, và có bằng chứng độc lập là mất thật | xem `dropped_pages`, đổi engine |
+| `MOJIBAKE_SUSPECT` | text layer không phải ngôn ngữ nào — ToUnicode hỏng | rà tay; recall **không** thấy được lỗi này |
+| `TABLE_STRUCTURE_BROKEN` | > 25% bảng trong output bị băm (phần lớn ô rỗng) | đổi engine layout-aware |
+| `PROBE_FAILED` | probe không mở được file (hỏng, mã hoá, sai đuôi) | rà tay — output đến từ engine phủ rộng, không phải lựa chọn có căn cứ |
+| `PROBE_FAILED_UNVERIFIED` | probe lỗi **và** không chấm nổi `readable_ratio` | **không index** — không tín hiệu nào nói đây là chữ |
+| `GATE_EVAL_FAILED` | gate recall ném lỗi; **không có** `text_recall` để tin | rà tay — vắng số đo khác với đạt ngưỡng |
+| `NEEDS_OCR` | PDF không có text layer, đã chuyển sang nhánh OCR | dấu vết định tuyến |
+| `LAYOUT_RISK_MEDIUM` | 100–400 nét vẽ/trang: có kẻ bảng nhưng chưa đủ dày để lên T2 | dấu vết định tuyến |
+
+Bốn cờ mới nhất — `MOJIBAKE_SUSPECT`, `TABLE_STRUCTURE_BROKEN`, `PROBE_FAILED`,
+`GATE_EVAL_FAILED` — **chỉ audit, chưa nằm trong tập chặn index**: bằng chứng hiệu chỉnh
+hiện mới có một ca dương tính mỗi loại. Theo playbook: đo trước, chặn sau.
 
 ## Cái gì được vào index
 
 ```
 chặn:  PARSE_FAILED · EMPTY_SUCCESS · TEXT_RECALL_LOW · HIGH_VALUE_MISSING
+       · PROBE_FAILED_UNVERIFIED
        (+ HIDDEN_SHEET_LEAK_RISK cho workbook thầu)
 vào:   mọi thứ còn lại — WATCH · REGION_DROPPED · HIGH_VALUE_RECOVERED là dấu vết
        "đã can thiệp", không phải phiếu phủ quyết
 ```
+
+**`PROBE_FAILED` một mình không chặn, và đó là kết quả đo chứ không phải sự thận trọng.**
+Ba file cùng mang cờ đó: `corrupt.pdf` → `%PDF-1.4 broken garbage`; `fake.xlsx` →
+`not a pdf`; một PDF tốt lưu nhầm tên `.xlsx` → **đủ nội dung**, `readable_ratio` 0,329.
+Hai ca đầu không chấm nổi `readable_ratio` (quá ít từ), ca thứ ba chấm được và lành mạnh.
+Vì vậy phép hội — probe lỗi **và** không chấm được — mới là thứ tách rác khỏi file chỉ
+sai cái đuôi. Sai đuôi file là chuyện thường trong dữ liệu thật; chặn nhầm nó thì đắt hơn
+là để lọt một file rác đã mang sẵn hai cờ audit.
+
+Giới hạn phải nhớ: tài liệu ngắn hoặc thuần phi-Latin cũng cho `readable_ratio = None`,
+nên probe lỗi trên đúng loại đó sẽ bị chặn oan. Ngưỡng này hiệu chỉnh trên **ba file** —
+đo rộng hơn trước khi dựa vào nó ở quy mô lớn.
 
 **`high_value_recall = None` không chặn.** Tài liệu ít hơn 5 loại mã/đơn vị thì không đủ căn cứ để kết luận, và đó không phải bằng chứng mất mát — đòi một tín hiệu high-value dương mới cho index sẽ phạt đúng lớp cert và báo cáo ngắn. `04-iec-60731` sau khi vá đạt `text_recall` 0,985 với `hv = None`: vào index bình thường.
 
@@ -123,6 +154,16 @@ Không có một con số nào phân biệt được "vứt mất một khối" 
 | `high_value_recall` | tỉ lệ **loại** token quan trọng còn sống sót ít nhất một lần: mã model (`BMU-8`), đơn vị (`51.2V`, `5.12kWh`), mã DIP, chuẩn (`IEC62619`, `UN38.3`) |
 | `page_recalls[i]` | như trên nhưng theo từng trang, để khoanh vùng trang nào mất; các trang < 0,90 được ghi vào frontmatter thành `low_recall_pages` |
 | `page_absent[i]` | tỉ lệ từ vựng của trang **biến mất khỏi toàn tài liệu** — miễn nhiễm với header lặp, vì header luôn có mặt ở trang khác |
+
+Hai chỉ số nữa chấm trên **output**, không so với nguồn — đó là cách chúng thấy được
+thứ recall về mặt cấu trúc không thấy nổi:
+
+| Chỉ số | Đo gì | Cờ |
+|---|---|---|
+| `readable_ratio` | tỉ lệ từ Latin trong output là hư từ (EN hoặc VI, lấy `max`) — trả `None` khi < 200 token Latin, ví dụ tài liệu thuần CJK | `MOJIBAKE_SUSPECT` < 0,02 |
+| `table_defect_share` | tỉ lệ bảng trong output bị băm (> 50% ô rỗng, hoặc hàng lệch số cột) | `TABLE_STRUCTURE_BROKEN` > 0,25 |
+
+`None` ở cả hai nghĩa là **không đủ căn cứ**, không phải "đạt".
 
 Vì sao cần cả ba — hai ca thật đứng cạnh nhau:
 
@@ -150,10 +191,22 @@ Hai kiểu này cần hai công cụ khác nhau. Trên `datasheet`, page-fill ch
 
 Mọi cờ chỉ được quyết định **sau khi cả hai bước vá chạy xong**, để không còn báo động thừa trên output mà bước sau đã sửa.
 
-**Hai giới hạn đã biết, cố ý chưa xử lý:**
+**Ba giới hạn đã biết, cố ý chưa xử lý:**
 
 - *Mất một token đơn lẻ trong túi high-value lớn.* `bao-gia-pin-v16.pdf` rơi mất `20,48kWh` — dung lượng trong bảng báo giá — nhưng hv vẫn 0,980. Hạ ngưỡng để bắt nó sẽ kéo lại hai ca sạch. Cần một cờ mềm riêng, không nhét vào `HIGH_VALUE_MISSING`.
-- *Text layer hỏng.* Tài liệu có ToUnicode lỗi cho ra mojibake (`FDO 3DUDPHWHUV`); "mất token" ở đó là mất so với một ground truth không đọc được. Luật lọc hiện tại (`tỉ lệ dòng một ký tự ≥ 0,50`) không bắt loại này.
+- *Chuẩn chứng nhận viết rời không được gấp.* `normalize()` gấp khoảng cách đơn vị
+  (`0 ° C` → `0°C`) nhưng **không** gấp khoảng cách trong mã chuẩn. Nên nếu text layer
+  viết `IEC 62619` còn engine viết `IEC62619`, gate coi đó là hai token khác nhau và
+  `high_value_recall` tụt xuống **0,000** dù không mất ký tự nào — kéo theo
+  `HIGH_VALUE_MISSING` và một lượt inject append lại toàn bộ dòng chuẩn thành chunk thừa.
+  Đã đo ba điều: rule gấp là **no-op** khi hai bên cùng dạng (1,000 → 1,000), **không**
+  làm loãng túi token (20 loại trước và sau — pattern vốn đã bắt cả dạng rời), và việc
+  dạng dính khớp hai pattern là vô hại vì metric đếm hiện diện chứ không đếm số lần.
+  Nghĩa là rule *an toàn*; cái chưa có là bằng chứng nó *cần* — chưa ai đo xem có engine
+  nào thật sự viết khác text layer ở dạng chuẩn không. Đo bằng
+  `scan_unit_variants.py` (`std_spaced` / `std_tight`) trên corpus thật trước khi thêm.
+
+- *Text layer hỏng.* Tài liệu có ToUnicode lỗi cho ra mojibake (`FDO 3DUDPHWHUV`); "mất token" ở đó là mất so với một ground truth không đọc được. Recall không thể thấy điều này — nó so output với chính text layer, nên khi text layer là bên hỏng thì **hai bên đồng ý** và file đạt `text_recall` 0,986 mà sạch cờ. Cờ `MOJIBAKE_SUSPECT` bắt riêng ca này bằng một câu hỏi khác: *văn bản này có phải một ngôn ngữ không* (`readable_ratio` — tỉ lệ từ Latin là hư từ, ngưỡng 0,02 trên ≥ 200 token Latin). Vẫn **audit-only**, chưa chặn index: mới có một ca dương tính trong bằng chứng.
 
 Chọn engine cho cert: **để router quyết**. Ép `--engine docling` lên SDS/UN38.3 không cứu thêm mã chuẩn nào (hv đã 1,000 ở cả hai đường) mà mất thêm prose (`text_recall` 0,985→0,973 và 0,964→0,908) và tốn 150–190× thời gian.
 
