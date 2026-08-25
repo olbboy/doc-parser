@@ -39,6 +39,10 @@ jobs:
           # Prevent accidental network calls to HuggingFace during CI
           HF_HUB_OFFLINE: "1"
 
+      - name: Lint
+        # Config lives in pyproject.toml [tool.ruff]; the tree is clean against it.
+        run: pipx run ruff check .
+
       - name: Validate YAML templates
         run: |
           python -c "

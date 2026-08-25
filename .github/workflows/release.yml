@@ -19,6 +19,28 @@ jobs:
         with:
           fetch-depth: 0   # full history so git describe works
 
+      # ── The tag is the release's identity; the artefacts must agree with it ──
+      # Without this the build happily publishes doc_parser-2.0.1.whl under a
+      # release named v2.0.2. VERSION has drifted from pyproject once already.
+      - name: Check tag matches pyproject and VERSION
+        shell: python
+        run: |
+          import os, pathlib, re, sys
+
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          # Regex rather than tomllib: this step runs before setup-python, so it
+          # must not depend on the runner's default interpreter being 3.11+.
+          m = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pathlib.Path("pyproject.toml").read_text())
+          proj = m.group(1) if m else "<not found>"
+          vfile = pathlib.Path("VERSION").read_text().strip()
+
+          bad = [f"{name}={value!r}" for name, value in
+                 (("pyproject.toml", proj), ("VERSION", vfile)) if value != tag]
+          if bad:
+              print(f"::error::tag v{tag} disagrees with " + ", ".join(bad))
+              sys.exit(1)
+          print(f"Version {tag} consistent across tag, pyproject.toml and VERSION.")
+
       # ── Extract release notes for this version from CHANGELOG.md ──────────
       - name: Extract release notes
         id: notes
