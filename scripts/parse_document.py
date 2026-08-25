@@ -38,7 +38,8 @@ def _run(venv, script, *args, timeout=3600):
     r = subprocess.run([_py(venv), str(RUNNERS / script), *map(str, args)],
                        capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0:
-        raise RuntimeError((r.stderr or r.stdout).strip().splitlines()[-1][:300] if (r.stderr or r.stdout) else "exit != 0")
+        msg = ((r.stderr or "") + (r.stdout or "")).strip()
+        raise RuntimeError(msg.splitlines()[-1][:300] if msg else "exit != 0")
     return r.stdout
 
 
@@ -85,7 +86,14 @@ DOCLING_SPLIT = "<<<DOCPARSE-SPLIT>>>"
 def run_docling_batch(paths, ocr=None):
     """One Docling process for many files — the warm-up is paid once, not per file."""
     args = list(paths) + (["--ocr", ocr[0], "--lang", ocr[1]] if ocr else [])
-    return _run("docling", "run_docling.py", *args).split("\n" + DOCLING_SPLIT + "\n")
+    outs = _run("docling", "run_docling.py", *args).split("\n" + DOCLING_SPLIT + "\n")
+    if len(outs) != len(paths):
+        # A document whose own content carries the sentinel would silently shift
+        # every later file's output onto the wrong source. Fail loudly instead;
+        # the callers fall back to the per-file path.
+        raise RuntimeError(f"docling batch trả {len(outs)} phần cho {len(paths)} file "
+                           "— nội dung có thể chứa chuỗi phân tách")
+    return outs
 
 
 def run_docling(path, ocr=None, **_):
@@ -127,13 +135,18 @@ def default_ocr():
 
 
 def run_gates(info, md):
-    """Recall readings for a PDF that carries a text layer; {} for anything else."""
+    """Recall readings for a PDF that carries a text layer; {} for anything else.
+
+    A gate crash must stay distinguishable from "nothing to score": a corrupt PDF
+    that pypdfium2 cannot reopen would otherwise produce a clean-looking output
+    with no recall numbers and no trace of why.
+    """
     if info["kind"] != "pdf" or not md:
         return {}
     try:
         return quality_gates.evaluate(info["file"], md, quality_gates.split_pages(md))
-    except Exception:
-        return {}
+    except Exception as e:
+        return {"gate_error": f"{type(e).__name__}: {e}"[:200]}
 
 
 def repair_if_dropped(info, md, used, gates):
@@ -151,7 +164,7 @@ def repair_if_dropped(info, md, used, gates):
     """
     if info["kind"] != "pdf" or not md or used not in ("docling", "mineru"):
         return md, [], []
-    pages = quality_gates.split_pages(md)
+    pages = quality_gates.aligned_pages(info["file"], md)
     dropped = quality_gates.region_dropped_pages(info["file"], md, gates, pages)
     if not dropped:
         return md, [], []
@@ -161,6 +174,38 @@ def repair_if_dropped(info, md, used, gates):
         return md, [], dropped
     md, repaired = repair_dropped_regions.recover(info["file"], dropped, donor, md, pages)
     return md, repaired, dropped
+
+
+def needs_hv_inject(gates):
+    """True when the document measurably lost high-value tokens.
+
+    0.0 is a real reading — every token gone, the worst case the inject exists
+    for — and must trigger it; only None (too few distinct tokens to judge)
+    skips. An `or`-default here once turned 0.0 into "unmeasured" and skipped
+    the repair on exactly the documents that needed it most.
+    """
+    hv = gates.get("high_value_recall")
+    return hv is not None and hv < quality_gates.HIGH_VALUE_MISSING
+
+
+def source_unverified(flags, readable):
+    """True when a fallback engine produced output nothing confirms is text.
+
+    `PROBE_FAILED` alone does not mean the output is garbage. Measured on three
+    files: `corrupt.pdf` yields `%PDF-1.4 broken garbage`, `fake.xlsx` yields
+    `not a pdf`, and a perfectly good PDF saved under an `.xlsx` name yields its
+    full text at `readable_ratio` 0.329. All three carry `PROBE_FAILED`, so
+    blocking on it would reject the one file that parsed correctly.
+
+    What separates them is whether the output can be read as a language at all.
+    `None` is not "readable" — it means the question could not be answered, which
+    on a file the router never got to route is the same as no evidence at all.
+
+    Known cost: a genuinely short document, or one with no Latin script, also
+    scores `None`. Combined with a failed probe it is blocked here. Calibrated on
+    three files; widen the evidence before relying on it in bulk.
+    """
+    return "PROBE_FAILED" in flags and readable is None
 
 
 def decide_recall_flags(gates):
@@ -214,9 +259,21 @@ def output_path(src, outdir):
     return out
 
 
+# The engine each tier runs when the user forces the tier by hand. T3 is the only
+# route to MinerU's hybrid backend — the prober never returns it on its own.
+TIER_ENGINE = {"T0": "anydoc", "T0b": "markitdown", "T1": "mineru", "T2": "docling", "T3": "mineru"}
+
+
 def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=False,
               pre=None):
     info = probe(path)
+    if forced_tier != "auto":
+        mapped = TIER_ENGINE[forced_tier]
+        # Keep the probe's engine spec when it already matches the forced tier's
+        # engine — a scanned PDF forced to T2 must keep its `docling:ocr:...` spec.
+        if not forced_engine and not info["engine"].startswith(mapped):
+            info["engine"], info["reason"] = mapped, "tier do người dùng chỉ định"
+        info["tier"] = forced_tier
     if forced_engine:
         info["engine"], info["reason"] = forced_engine, "engine do người dùng chỉ định"
     if dry_run:
@@ -264,7 +321,7 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
     # certification standards and unit values inside it are gone. Pull those lines
     # straight from the text layer instead of re-running an engine.
     tokens = []
-    if md and info["kind"] == "pdf" and (gates.get("high_value_recall") or 1) < quality_gates.HIGH_VALUE_MISSING:
+    if md and info["kind"] == "pdf" and needs_hv_inject(gates):
         try:
             md, tokens = repair_dropped_regions.recover_high_value(info["file"], md)
         except Exception:
@@ -296,6 +353,12 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
 
     if md:
         md = md.replace(quality_gates.PAGE_MARK + "\n", "").replace(quality_gates.PAGE_MARK, "")
+
+    if gates.get("gate_error"):
+        # The recall gates crashed: there are no numbers, and that is different
+        # from "nothing to score". Leave the reason where an operator can see it.
+        info["gate_error"] = gates["gate_error"]
+        flags.append("GATE_EVAL_FAILED")
 
     recall = gates.get("text_recall")
     if recall is not None:
@@ -337,6 +400,8 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
             info["readable_ratio"] = readable
             if readable < quality_gates.READABLE_RATIO_MIN:
                 flags.append("MOJIBAKE_SUSPECT")
+        if source_unverified(flags, readable):
+            flags.append("PROBE_FAILED_UNVERIFIED")
         share = quality_gates.table_defect_share(md)
         if share is not None:
             info["table_defect_share"] = share
@@ -346,8 +411,10 @@ def parse_one(path, outdir, forced_tier="auto", forced_engine=None, dry_run=Fals
     out = output_path(path, outdir)
     out.parent.mkdir(parents=True, exist_ok=True)
     fm = {"source_file": pathlib.Path(path).name, "doc_kind": info["kind"],
-          "pages": info.get("pages") or info.get("sheets") or info.get("slides"),
+          "pages": next((info[k] for k in ("pages", "sheets", "slides")
+                         if info.get(k) is not None), None),
           "parser": used, "parser_tier": info["tier"], "parser_reason": info["reason"],
+          "gate_error": info.get("gate_error"),
           "text_recall": info.get("text_recall"),
           "high_value_recall": info.get("high_value_recall"),
           "readable_ratio": info.get("readable_ratio"),
@@ -370,14 +437,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+")
     ap.add_argument("-o", "--outdir", default="parsed")
-    ap.add_argument("--tier", default="auto")
+    ap.add_argument("--tier", default="auto", choices=["auto", *TIER_ENGINE])
     ap.add_argument("--engine", choices=list(ENGINES))
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
-    # Group the Docling-bound files (same OCR settings) into one process.
+    # Group the Docling-bound files (same OCR settings) into one process. Only on
+    # auto routing: a forced tier can point a docling-probed file elsewhere, and a
+    # pre-batched result would silently override that choice.
     batched = {}
-    if not a.dry_run and not a.engine and len(a.files) > 1:
+    if not a.dry_run and not a.engine and a.tier == "auto" and len(a.files) > 1:
         groups = {}
         for f in a.files:
             spec = probe(f)["engine"]
@@ -398,15 +467,25 @@ def main():
             except Exception:
                 pass                          # fall through to per-file attempts
 
+    crashed = 0
     for f in a.files:
-        info, out = parse_one(f, a.outdir, a.tier, a.engine, a.dry_run, batched.get(f))
         name = pathlib.Path(f).name
+        # One unreadable file must not kill the rest of the batch: report it on
+        # its own line and keep going, then exit non-zero at the end.
+        try:
+            info, out = parse_one(f, a.outdir, a.tier, a.engine, a.dry_run, batched.get(f))
+        except Exception as e:
+            crashed += 1
+            print(f"{name:34s} → lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+            continue
         if a.dry_run:
             print(f"{name:34s} → {info['tier']:3s} {info['engine']:28s} {info['reason']}")
         else:
             secs = next((x["seconds"] for x in info["attempts"] if x.get("ok")), None)
             flags = ",".join(info["quality_flags"]) or "-"
             print(f"{name:34s} → {info['tier']:3s} {str(info['parser']):11s} {secs}s  [{flags}]")
+    if crashed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -14,9 +14,10 @@ layer writes "0°C".
 Last run: 11/08/2026 — 530 PDFs from `knowledge/business` and `~/Downloads/Pytes
 Product`. Sampling is seeded so a repeat run picks the same files.
 
-Usage: scan_unit_variants.py <dir> [dir...] [--all] [--json out.json]
+Usage: scan_unit_variants.py [dir...] [--all] [--json out.json]
+       (không truyền dir thì đọc $DOCPARSE_CORPUS_ROOT)
 """
-import argparse, collections, json, pathlib, random, re, sys
+import argparse, collections, json, os, pathlib, random, re, sys
 
 import pypdfium2 as pdfium
 
@@ -81,12 +82,18 @@ def scan(roots, take_all=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("roots", nargs="+")
+    ap.add_argument("roots", nargs="*",
+                    help="thư mục corpus; mặc định $DOCPARSE_CORPUS_ROOT")
     ap.add_argument("--all", action="store_true", help="quét mọi file, bỏ lấy mẫu")
     ap.add_argument("--json", help="ghi kết quả đầy đủ ra file")
     a = ap.parse_args()
 
-    res = scan([pathlib.Path(r) for r in a.roots], a.all)
+    roots = a.roots or ([os.environ["DOCPARSE_CORPUS_ROOT"]]
+                        if os.environ.get("DOCPARSE_CORPUS_ROOT") else None)
+    if not roots:
+        ap.error("cần thư mục corpus (đối số vị trí hoặc $DOCPARSE_CORPUS_ROOT)")
+
+    res = scan([pathlib.Path(r) for r in roots], a.all)
     print(f"quét {res['scanned']} PDF có text layer "
           f"(trong {res['total_files']} file, {'toàn bộ' if a.all else f'mẫu {SAMPLE}, seed {SEED}'})\n")
     print(f"{'biến thể':18s} {'lần':>6s} {'file':>5s}  ví dụ")

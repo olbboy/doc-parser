@@ -22,7 +22,9 @@ SPLIT = "<<<DOCPARSE-SPLIT>>>"
 PAGE_MARK = "<!-- docparse:page -->"
 
 a = argparse.ArgumentParser()
-a.add_argument("files", nargs="+"); a.add_argument("--ocr"); a.add_argument("--lang")
+a.add_argument("files", nargs="+")
+a.add_argument("--ocr")
+a.add_argument("--lang")
 a = a.parse_args()
 
 opt = PdfPipelineOptions()

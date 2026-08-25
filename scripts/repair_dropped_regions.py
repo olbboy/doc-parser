@@ -14,8 +14,6 @@ perfectly, while the HV48100 nameplate is 3202 paths per page and Docling throws
 it away. Path density tells you a grid is present, not whether the engine kept the
 text inside it.
 """
-import re
-
 from quality_gates import (words, recall, page_texts, normalize,
                            high_value_tokens, PAGE_MARK)
 
@@ -30,18 +28,25 @@ MIN_BLOCK_WORDS = 6
 
 
 def split_blocks(md):
-    """Markdown blocks, with contiguous table rows kept together as one block."""
+    """Markdown blocks, with contiguous table rows kept together as one block.
+
+    A blank line ends the current block whether or not it is a table — GFM
+    tables cannot span one. Flushing only outside tables once glued a table to
+    the unrelated prose after it, and the merged block's mixed vocabulary then
+    mapped to the wrong page.
+    """
     blocks, buf, in_table = [], [], False
     for line in md.splitlines():
         is_row = line.lstrip().startswith("|")
-        if not line.strip() and not in_table:
+        if not line.strip():
             if buf:
                 blocks.append("\n".join(buf).strip())
                 buf = []
+            in_table = False
             continue
-        if in_table and not is_row and line.strip():
+        if in_table and not is_row:
             blocks.append("\n".join(buf).strip())
-            buf, in_table = [], False
+            buf = []
         in_table = is_row
         buf.append(line)
     if buf:
@@ -91,7 +96,7 @@ def recover(pdf_path, dropped_pages, donor_md, primary_md, primary_pages=None):
     # guard: a block the rest of the output already carries well is not re-inserted.
     page_words = [words(p) for p in (primary_pages or [])]
 
-    repaired, additions = [], {}
+    additions = {}
     for p in dropped_pages:
         take = []
         for b, page in zip(blocks, assigned):
@@ -104,23 +109,28 @@ def recover(pdf_path, dropped_pages, donor_md, primary_md, primary_pages=None):
                 take.append(b)
         if take:
             additions[p] = take
-            repaired.append(p + 1)                      # 1-based for humans
 
     if not additions:
         return primary_md, []
 
+    # `repaired` records only what actually landed in the output — a page whose
+    # index falls outside the primary's segments gets nothing written, and
+    # reporting it as repaired would turn a silent drop into a clean frontmatter.
     if primary_pages:
-        out = list(primary_pages)
+        out, repaired = list(primary_pages), []
         for p, take in additions.items():
             if p < len(out):
                 out[p] = out[p].rstrip() + "\n\n" + "\n\n".join(take)
+                repaired.append(p + 1)                  # 1-based for humans
+        if not repaired:
+            return primary_md, []
         return (PAGE_MARK + "\n").join(out), repaired
 
     # No page anchors in the primary output: append once, labelled, never inline.
     tail = "\n\n".join(
         f"## [khôi phục từ trang {p + 1}]\n\n" + "\n\n".join(take)
         for p, take in sorted(additions.items()))
-    return primary_md.rstrip() + "\n\n" + tail + "\n", repaired
+    return primary_md.rstrip() + "\n\n" + tail + "\n", [p + 1 for p in sorted(additions)]
 
 
 # --- sparse high-value recovery ---------------------------------------------
