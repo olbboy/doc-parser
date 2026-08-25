@@ -64,8 +64,8 @@ repaired_tokens: ["IEC62619", "UN38.3", "IEC62133-2"]
 `HIGH_VALUE_RECOVERED` is an audit trail, not a veto. The file is safe to index.
 
 Files that must **not** be indexed: `PARSE_FAILED`, `EMPTY_SUCCESS`, `TEXT_RECALL_LOW`,
-`HIGH_VALUE_MISSING` (after repair failed). For this file, all three blocking flags are
-absent — proceed.
+`HIGH_VALUE_MISSING` (after repair failed), and `PROBE_FAILED_UNVERIFIED`. For this file
+every blocking flag is absent — proceed.
 
 ---
 

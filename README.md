@@ -104,7 +104,13 @@ silent.
 | **T0b** | MarkItDown | `.msg`, `.ipynb`, `.zip`, URLs, audio | — |
 | **T1** | MinerU `office` | XLSX with hidden sheets / merged cells, DOCX merged cells, all PPTX | 0.03 – 0.8 s/file |
 | **T2** | Docling | Dense-grid PDFs, borderless spec tables, **all scanned PDFs** | 2.1 pages/s |
-| **T3** | MinerU `hybrid` | When real `colspan`/`rowspan` or formulas must be preserved | 0.17 pages/s — batch mode |
+| **T3** | MinerU `hybrid` | When real `colspan`/`rowspan` or formulas must be preserved — **`--tier T3` only** | 0.17 pages/s — batch mode |
+
+T0–T2 are chosen by the probe. **T3 is never routed automatically**: the probe measures
+page count, characters, vector paths and images, none of which say whether a table carries
+a real `colspan` or a formula. Ask for it explicitly when you know the document needs it —
+it is 12× slower than T2 (100 pages: ~10 min against ~48 s), so a detector that guessed
+wrong would be expensive.
 
 <p align="right">(<a href="#about">back to top</a>)</p>
 
@@ -212,13 +218,36 @@ Flags appear in `quality_flags` in the output frontmatter. Scored on the **final
 | `HIGH_VALUE_RECOVERED` | Lost tokens recovered from text layer | Audit trail only |
 | `REGION_DROPPED` | Engine discarded a region — **auto-repaired** | See `repaired_pages` |
 | `REGION_DROPPED_UNREPAIRED` | Region drop detected but repair found nothing | Switch engine |
+| `MOJIBAKE_SUSPECT` | Text is not the function-word profile of any language — broken ToUnicode CMap | Manual review — recall cannot see this failure |
+| `TABLE_STRUCTURE_BROKEN` | > 25 % of the output's tables are shredded (mostly blank cells) | Switch to a layout-aware engine |
+| `PROBE_FAILED` | The probe could not open the file (corrupt, encrypted, wrong extension) | Manual review — the engine was a fallback, not a choice |
+| `PROBE_FAILED_UNVERIFIED` | Probe failed **and** the output cannot be read as a language | **Do not index** — nothing confirms this is text |
+| `GATE_EVAL_FAILED` | The recall gates raised; there is no `text_recall` to trust | Manual review — a missing measurement is not a passing one |
+| `NEEDS_OCR` | PDF has no text layer; routed to the OCR chain | Routing audit trail |
+| `LAYOUT_RISK_MEDIUM` | 100–400 vector paths/page: some ruling, not enough for T2 | Routing audit trail |
 
 ### Index policy
 
 ```
 Block:   PARSE_FAILED · EMPTY_SUCCESS · TEXT_RECALL_LOW · HIGH_VALUE_MISSING
+         · PROBE_FAILED_UNVERIFIED
 Allow:   everything else — WATCH · REGION_DROPPED · HIGH_VALUE_RECOVERED are audit trails
 ```
+
+`PROBE_FAILED` on its own does **not** block. Measured on three files that all carry it:
+`corrupt.pdf` yields `%PDF-1.4 broken garbage`, `fake.xlsx` yields `not a pdf`, and a
+perfectly good PDF saved under an `.xlsx` name yields its full text at `readable_ratio`
+0.329. Blocking on the flag alone would reject the third. `PROBE_FAILED_UNVERIFIED` fires
+only when the probe failed *and* `readable_ratio` could not be measured at all, which is
+what separates the first two from the third.
+
+Its known cost: a genuinely short document, or one with no Latin script, also yields no
+`readable_ratio`, so a failed probe on such a file blocks it. Calibrated on three files —
+widen the evidence before relying on it in bulk.
+
+`MOJIBAKE_SUSPECT`, `TABLE_STRUCTURE_BROKEN`, `PROBE_FAILED` and `GATE_EVAL_FAILED` remain
+**audit-only** — each rests on a single calibration positive, and the playbook rule is
+measure first, block second.
 
 <p align="right">(<a href="#about">back to top</a>)</p>
 
@@ -242,7 +271,7 @@ Two constraints the measurements forced:
 |---|---|---|
 | `DOCPARSE_HOME` | `~/.local/share/doc-parse` | Root for all engine venvs and model caches |
 | `DOCPARSE_MINERU_URL` | `http://127.0.0.1:8123` | URL of the resident `mineru-api` HTTP service |
-| `DOCPARSE_CORPUS_ROOT` | *(none)* | Path to a wider corpus for threshold exploration |
+| `DOCPARSE_CORPUS_ROOT` | *(none)* | Default corpus root for `scripts/scan_unit_variants.py` (threshold exploration; not read by the parser itself) |
 
 ---
 

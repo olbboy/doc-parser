@@ -16,7 +16,8 @@ User wants to parse a document
 
 ## Hard rules
 
-- `EMPTY_SUCCESS` or `TEXT_RECALL_LOW` → **do not index**, retry with higher tier
+- `EMPTY_SUCCESS`, `TEXT_RECALL_LOW` or `PROBE_FAILED_UNVERIFIED` → **do not index**, retry with higher tier
+- `PROBE_FAILED` alone is an audit trail, not a block — a file with the wrong extension lands there and may parse fine
 - Never call `mineru` CLI in a loop — use the resident HTTP service
 - Never change a threshold without measuring first (`docs/measurement-driven-upgrade-playbook.md`)
 
