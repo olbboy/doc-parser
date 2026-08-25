@@ -50,15 +50,20 @@ doc-parse  = "scripts.parse_document:main"
 # The full engine setup (venvs + model downloads) still requires setup-engines.sh
 # ---------------------------------------------------------------------------
 [project.optional-dependencies]
-anydoc     = ["anydoc>=0.1.7"]
+# Distribution names, matching what setup-engines.sh actually installs: anydoc is
+# published as `firecrawl-anydoc`, and `six` is an undeclared MinerU dependency whose
+# absence surfaces as a misleading "requires mineru[pipeline]" error.
+anydoc     = ["firecrawl-anydoc>=0.1.7"]
 markitdown = ["markitdown[all]>=0.1.7"]
 docling    = ["docling>=2.119.0"]
-mineru     = ["mineru[pipeline]>=3.4.4"]
+mineru     = ["mineru[pipeline]>=3.4.4", "six", "requests"]
 all        = [
-    "anydoc>=0.1.7",
+    "firecrawl-anydoc>=0.1.7",
     "markitdown[all]>=0.1.7",
     "docling>=2.119.0",
     "mineru[pipeline]>=3.4.4",
+    "six",
+    "requests",
 ]
 dev = [
     "pytest>=8.0",
@@ -78,7 +83,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]   # line length — docstrings with benchmark tables are intentionally wide
+ignore = [
+    "E501",   # line length — docstrings with benchmark tables are intentionally wide
+    "E401",   # every script opens with one compact stdlib import line, by convention
+    "I001",   # ...which import sorting would split into one name per line
+]
 
 [tool.pytest.ini_options]
 testpaths   = ["scripts"]
