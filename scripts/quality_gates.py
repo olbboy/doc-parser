@@ -29,6 +29,7 @@ PAGE_RECALL_MIN = 0.90       # below: the page is a region-drop candidate
 PAGE_DEAD_RECALL = 0.50      # a page must be this badly hit before it can be "dead"
 PAGE_ABSENT_DEAD = 0.10      # ...and this much of its wording must be gone, not folded
 MIN_PAGE_TYPES = 12          # distinct words a page needs before its ratio is stable
+MIN_PAGE_WORDS = 30          # total occurrences below this: near-empty page, nothing to lose
 TEXT_RECALL_LOW = 0.95
 TEXT_RECALL_WATCH = 0.98
 
@@ -279,6 +280,12 @@ def evaluate(pdf_path, md, md_pages=None):
     reflowed ones.
     """
     pages = page_texts(pdf_path)
+    # Docling only emits a page break between pages that produced items, so a
+    # blank or fully-filtered page shifts every later segment onto the wrong
+    # page. When the marker count disagrees with the PDF, per-page scoring would
+    # compare page i against page i+1's output — fall back to whole-document.
+    if md_pages is not None and len(md_pages) != len(pages):
+        md_pages = None
     ref_all = "\n".join(pages)
     ref_w = words(ref_all)
     if sum(ref_w.values()) < 200:
@@ -293,7 +300,7 @@ def evaluate(pdf_path, md, md_pages=None):
     per, absent = [], []
     for i, ptext in enumerate(pages):
         pw = words(ptext)
-        if sum(pw.values()) < 30:          # near-empty page: nothing to lose
+        if sum(pw.values()) < MIN_PAGE_WORDS:   # near-empty page: nothing to lose
             per.append(None)
         else:
             target = words(md_pages[i]) if md_pages and i < len(md_pages) else hyp_all
@@ -369,8 +376,10 @@ def region_dropped_pages(pdf_path, md, gates, md_pages=None, min_recall=PAGE_REC
     recall alone is not enough — it also fires on any page the engine merely
     reflowed, which is what `compat-list.pdf` does at 0.93 while losing nothing.
     """
-    pages = page_texts(pdf_path)
     per = gates.get("page_recalls") or []
+    if not per:
+        return []
+    pages = page_texts(pdf_path)
     # Same definition of "intact" the flags use, rather than a second threshold.
     # The old 0.99 was a leftover from counting occurrences, where near-complete
     # meant "almost every repeat survived"; under presence it made a document that
@@ -379,7 +388,12 @@ def region_dropped_pages(pdf_path, md, gates, md_pages=None, min_recall=PAGE_REC
     hv_lost = high_value_intact(gates) is False
     dropped = []
     for i, r in enumerate(per):
-        if r is None or r >= min_recall or len(words(pages[i])) < 30:
+        # Same near-empty definition evaluate() uses — total occurrences, not
+        # distinct types. Counting types here silently excluded exactly the pages
+        # a region drop hits hardest: a nameplate of repeated units and model
+        # fields has many occurrences of few types, so its sub-threshold recall
+        # never reached the corroboration checks below.
+        if r is None or r >= min_recall or sum(words(pages[i]).values()) < MIN_PAGE_WORDS:
             continue
         placeholder = ("<!-- image -->" in (md_pages[i] if md_pages and i < len(md_pages) else md))
         if placeholder or hv_lost:
@@ -392,3 +406,18 @@ def split_pages(md):
     if PAGE_MARK not in md:
         return None
     return [p.strip() for p in md.split(PAGE_MARK)]
+
+
+def aligned_pages(pdf_path, md):
+    """split_pages(md), but None unless the segments match the PDF's page count.
+
+    Docling only emits a page break between pages that produced items, so a
+    blank or fully-filtered page silently shifts every later segment onto the
+    wrong physical page. Page-indexed consumers — per-page recall, page-fill
+    repair — must fall back to their whole-document path rather than score or
+    inject against a neighbouring page.
+    """
+    pages = split_pages(md)
+    if pages is not None and len(pages) != len(page_texts(pdf_path)):
+        return None
+    return pages

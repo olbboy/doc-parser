@@ -6,7 +6,7 @@ from measurements on the BLVERA corpus; see SKILL.md for the evidence table.
 
 Usage: probe_document.py <file> [--json]
 """
-import argparse, json, pathlib, platform, sys, zipfile
+import argparse, json, pathlib, platform, zipfile
 
 # --- routing thresholds (measured, not guessed) -----------------------------
 MIN_CHARS_PER_PAGE = 50      # below this a PDF has no usable text layer
@@ -78,6 +78,14 @@ def route(info):
     ext, k = info["ext"], info["kind"]
     flags = []
 
+    # A file its own probe cannot open (corrupt, encrypted, mislabelled) has none
+    # of the facts the branches below read. Route it to the broadest engine and
+    # flag it, so one bad file degrades to PARSE_FAILED instead of a KeyError
+    # that kills the whole batch.
+    if "probe_error" in info:
+        flags.append("PROBE_FAILED")
+        return "T0b", "markitdown", f"probe lỗi ({info['probe_error'][:120]}) — thử engine phủ rộng nhất", flags
+
     if ext in MARKITDOWN_ONLY:
         return "T0b", "markitdown", "định dạng chỉ markitdown đọc được", flags
     if ext in LEGACY_OFFICE:
@@ -138,7 +146,10 @@ def probe(path):
         info["probe_error"] = f"{type(e).__name__}: {e}"
     tier, engine, reason, flags = route(info)
     info.update(tier=tier, engine=engine, reason=reason, flags=flags)
-    if kind == "pdf" and info.get("chars_per_page", 1) < MIN_CHARS_PER_PAGE:
+    # Only a measured page count means "scanned"; a PDF the prober could not open
+    # is unknown, not scanned, and mislabelling it hides the real failure.
+    chars = info.get("chars_per_page")
+    if kind == "pdf" and chars is not None and chars < MIN_CHARS_PER_PAGE:
         info["kind"] = "pdf_scan"
     return info
 

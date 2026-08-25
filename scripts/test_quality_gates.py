@@ -13,7 +13,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from collections import Counter
 import quality_gates as qg
 import repair_dropped_regions as rr
-from parse_document import decide_recall_flags
+from parse_document import decide_recall_flags, needs_hv_inject, source_unverified
+from probe_document import route
 
 FAILS = []
 
@@ -171,7 +172,8 @@ check("None does not suppress an alarm",
 # layer reads `(XURSHDQ JHQHUDO` where the page shows `European general`, every
 # code shifted by 29. Recall cannot see it — the reference *is* the corrupt layer,
 # so both sides agree and the file scored text_recall 0.986 with no flag at all.
-_SHIFT = lambda t: "".join(chr(ord(c) - 29) if "a" <= c <= "z" or "A" <= c <= "Z" else c for c in t)
+def _SHIFT(t):
+    return "".join(chr(ord(c) - 29) if "a" <= c <= "z" or "A" <= c <= "Z" else c for c in t)
 _EN = "the system shall be installed with this bracket and it can not be used for that "
 _VI = "hệ thống này phải được lắp với giá đỡ và không thể dùng cho việc khác của các "
 
@@ -289,6 +291,109 @@ try:
     check("inject ignores an under-counted token", got3, [])
     check("under-counted token is not listed as missing",
           rr.missing_high_value(_FakePdf([DONOR_LINE * 3]), DONOR_LINE), [])
+finally:
+    rr.page_texts = rr_page_texts
+
+# --- the inject fires on measured loss, never on "unmeasured" ----------------
+# `or 1` once turned a real 0.0 — every token gone, the worst case the inject
+# exists for — into "unmeasured" and skipped the repair on exactly that document.
+check("hv 0.0 triggers the inject", needs_hv_inject({"high_value_recall": 0.0}), True)
+check("hv below threshold triggers", needs_hv_inject({"high_value_recall": 0.85}), True)
+check("hv at the threshold does not", needs_hv_inject({"high_value_recall": 0.90}), False)
+check("unmeasured hv does not", needs_hv_inject({"high_value_recall": None}), False)
+check("no gates at all does not", needs_hv_inject({}), False)
+
+# --- a failed probe blocks only when nothing says the output is text -----------
+# Three measured files all carry PROBE_FAILED: two are garbage, one is a good PDF
+# saved under an .xlsx name. Blocking on the flag alone rejects the third.
+check("garbage after a failed probe is blocked",
+      source_unverified(["PROBE_FAILED", "GATE_EVAL_FAILED"], None), True)
+check("readable output after a failed probe is not blocked",
+      source_unverified(["PROBE_FAILED"], 0.329), False)
+check("mojibake after a failed probe is measurable, so not blocked here",
+      source_unverified(["PROBE_FAILED"], 0.001), False)
+check("an unreadable ratio without a failed probe is not blocked",
+      source_unverified(["TEXT_RECALL_WATCH"], None), False)
+check("a clean file is untouched", source_unverified([], 0.25), False)
+
+# --- a broken probe routes broad instead of crashing --------------------------
+# probe_pdf/probe_xlsx raise on corrupt or encrypted files, leaving none of the
+# facts route() reads. That used to KeyError and kill the whole batch.
+_BROKEN = {"ext": ".pdf", "kind": "pdf", "probe_error": "PdfiumError: cannot open"}
+check("probe error routes to the broadest engine",
+      route(dict(_BROKEN))[:2], ("T0b", "markitdown"))
+check("probe error is flagged", "PROBE_FAILED" in route(dict(_BROKEN))[3], True)
+check("broken workbook routes the same way",
+      route({"ext": ".xlsx", "kind": "xlsx", "probe_error": "BadZipFile: x"})[:2],
+      ("T0b", "markitdown"))
+
+# --- region detection uses evaluate()'s own near-empty definition -------------
+# A nameplate page repeats few distinct tokens many times. Counting distinct
+# TYPES here (instead of total occurrences, evaluate()'s definition) silently
+# excluded exactly those pages from region-drop detection.
+DENSE_PAGE = " ".join(["51.2V", "100Ah", "5.12kWh"] * 12)     # 48 occurrences, 4 types
+qg_page_texts = qg.page_texts
+
+
+def _fake_qg_pages(pages):
+    def fake(path):
+        return pages
+    return fake
+
+
+qg.page_texts = _fake_qg_pages([DENSE_PAGE])
+try:
+    check("dense repetitive page is detectable as dropped",
+          qg.region_dropped_pages("x.pdf", "no placeholder",
+                                  {"page_recalls": [0.05], "high_value_recall": 0.5}), [0])
+finally:
+    qg.page_texts = qg_page_texts
+
+
+def _must_not_read(path):
+    raise AssertionError("PDF must not be read when there is nothing to correlate")
+
+
+qg.page_texts = _must_not_read
+try:
+    check("empty gates short-circuit without touching the PDF",
+          qg.region_dropped_pages("x.pdf", "md", {}), [])
+finally:
+    qg.page_texts = qg_page_texts
+
+# --- page anchors only count when they line up with the PDF -------------------
+# Docling omits the break for a page that produced no items, shifting every later
+# segment onto the wrong page; misaligned anchors must fall back to whole-document.
+qg.page_texts = _fake_qg_pages(["page one", "page two"])
+try:
+    TWO = f"p1{chr(10)}{qg.PAGE_MARK}{chr(10)}p2"
+    check("matching anchors pass through", qg.aligned_pages("x.pdf", TWO), ["p1", "p2"])
+    check("missing anchors stay None", qg.aligned_pages("x.pdf", "no marks"), None)
+    ONE = "only one segment"
+    check("fewer segments than pages fall back",
+          qg.aligned_pages("x.pdf", ONE + qg.PAGE_MARK + "x" + qg.PAGE_MARK + "y"), None)
+finally:
+    qg.page_texts = qg_page_texts
+
+# --- a blank line ends a table block ------------------------------------------
+check("blank line separates table from following prose",
+      rr.split_blocks("| a | b |\n| c | d |\n\nprose paragraph"),
+      ["| a | b |\n| c | d |", "prose paragraph"])
+check("table then prose with no blank line still splits",
+      rr.split_blocks("| a | b |\n| c | d |\nprose line"),
+      ["| a | b |\n| c | d |", "prose line"])
+
+# --- repaired_pages reports only what actually landed -------------------------
+# A dropped-page index outside the primary's segments writes nothing; reporting
+# it as repaired would turn a silent drop into a clean frontmatter.
+DONOR_BLOCK = "widget flange bracket sprocket gasket manifold"
+rr.page_texts = _fake_qg_pages(["", "", "", "", "", DONOR_BLOCK])
+try:
+    _md, _rep = rr.recover("x.pdf", [5], DONOR_BLOCK,
+                           "unrelated primary text", ["unrelated primary text"])
+    check("out-of-bounds page is not reported repaired", _rep, [])
+    check("primary output stays untouched when nothing landed",
+          _md, "unrelated primary text")
 finally:
     rr.page_texts = rr_page_texts
 

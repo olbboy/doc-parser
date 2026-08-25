@@ -12,11 +12,14 @@ behaviour, different denominator.
 
 Usage: run_regression.py [--keep] [name ...]
 """
-import argparse, json, pathlib, re, subprocess, sys, tempfile
+import argparse, json, pathlib, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).parent
 TESTDATA = HERE.parent / "testdata"
 PARSE = HERE / "parse_document.py"
+
+sys.path.insert(0, str(HERE))
+from quality_gates import PAGE_MARK  # noqa: E402
 
 
 def frontmatter(md_path):
@@ -65,7 +68,7 @@ def check(name, spec, fm, body):
 
     # Page markers are an internal gate anchor; leaking them would pollute every
     # RAG chunk with implementation detail.
-    if "<!-- docparse:page -->" in body:
+    if PAGE_MARK in body:
         bad.append("mốc trang lọt vào body")
     for s in spec.get("must_contain", []):
         if s not in body:
@@ -97,12 +100,17 @@ def main():
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
         pdf = TESTDATA / "regression" / f"{name}.pdf"
         if not pdf.exists():
-            print(f"✗ {name}: thiếu fixture {pdf}")
+            # The fixtures are partner documents and are not in the repository;
+            # testdata/README.md lists the minimum properties a substitute needs.
+            print(f"✗ {name}: thiếu fixture {pdf}\n"
+                  f"   xem testdata/README.md — mục '{name}' ghi thuộc tính tối thiểu "
+                  "của file thay thế")
             failures += 1
             continue
 
         run = subprocess.run([sys.executable, str(PARSE), str(pdf), "-o", str(outdir),
-                              *spec.get("args", [])], capture_output=True, text=True)
+                              *spec.get("args", [])], capture_output=True, text=True,
+                             timeout=3600)
         md = outdir / f"{name}.md"
         if run.returncode != 0 or not md.exists():
             print(f"✗ {name}: parse thất bại\n   {run.stderr.strip()[-300:]}")
